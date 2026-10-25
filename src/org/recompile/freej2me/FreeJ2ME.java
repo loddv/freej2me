@@ -62,7 +62,7 @@ public class FreeJ2ME
 	{
 		main = new Frame("FreeJ2ME");
 		main.setSize(350,450);
-		main.setBackground(new Color(0,0,64));
+		main.setBackground(new Color(0,0,0));
 		try
 		{
 			main.setIconImage(ImageIO.read(main.getClass().getResourceAsStream("/org/recompile/icon.png")));	
