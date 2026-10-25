@@ -66,7 +66,7 @@ public class Config
 
 		menu = new ArrayList<String[]>();
 		menu.add(new String[]{"Resume Game", "Restart", "Display Size", "Sound", "Limit FPS", "Phone", "Dimensions Inverted", "Rotation", "Exit"}); // 0 - Main Menu
-		menu.add(new String[]{"96x65","96x96","104x80","128x128","132x176","128x160","176x208","176x220", "208x208", "240x320", "320x240", "240x400", "352x416", "360x640", "640x360" ,"480x800", "800x480"}); // 1 - Size
+		menu.add(new String[]{"96x65","96x96","104x80","128x128","132x176","128x160","176x208","176x220", "208x208", "240x320", "320x240", "240x400", "352x416", "360x640", "640x360" ,"480x800", "800x480","540x960", "960x540"}); // 1 - Size
 		menu.add(new String[]{"Quit", "Main Menu"}); // 2 - Restart Notice
 		menu.add(new String[]{"On", "Off"}); // 3 - sound
 		menu.add(new String[]{"Standard", "Nokia", "Siemens","Motorola"}); // 4 - Phone 
@@ -314,24 +314,24 @@ public class Config
 
 		String[] t = menu.get(menuid);
 
-		int ah = (int)((height-50)/(t.length+1));
-		if(ah<15) { ah=15; }
+		int availableHeight = Math.max(1, height-50);
+		int ah = Math.max(15, availableHeight/(t.length+1));
 
 		int space = 0;
 		if(ah>15) { space = (ah-15) / 2; }
 
-		int max = (int)Math.floor((height-50)/ah);
-		int page = (int)Math.floor(itemid/max);
-		int start = (int)(max*page);
-		int pages = (int)Math.ceil(t.length/max);
+		int max = Math.max(1, availableHeight/ah);
+		int page = itemid/max;
+		int start = max*page;
+		int pages = (t.length+max-1)/max;
 
-		if(pages>=1)
+		if(pages>1)
 		{
 			gc.setColor(0xFFFFFF);
-			gc.drawString("Page "+(page+1)+" of "+(pages+1), width-3, height-17, Graphics.RIGHT);
+			gc.drawString("Page "+(page+1)+" of "+pages, width-3, height-17, Graphics.RIGHT);
 		}
 
-		for(int i=start; (i<(start+max))&(i<t.length); i++)
+		for(int i=start; i<(start+max) && i<t.length; i++)
 		{
 			label = t[i];
 			if(menuid==0 && i>1 && i<7)
