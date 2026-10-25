@@ -430,6 +430,16 @@ public class FreeJ2ME
 		lcd.updateScale((int)nw, (int)nh);
 	}
 
+	public boolean isInvertResolution()
+	{
+		return invertDimesions;
+	}
+
+	public void setInvertResolution(boolean invertDimesions)
+	{
+		this.invertDimesions = invertDimesions;
+	}
+
 	private class LCD extends Canvas
 	{
 		public int cx=0;
