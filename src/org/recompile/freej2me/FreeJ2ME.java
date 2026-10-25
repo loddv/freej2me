@@ -31,7 +31,7 @@ import javax.imageio.ImageIO;
 
 public class FreeJ2ME
 {
-	public static void main(String args[])
+	public static void main(String[] args)
 	{
 		FreeJ2ME app = new FreeJ2ME(args);
 	}
@@ -281,15 +281,19 @@ public class FreeJ2ME
 
 	private void restartGame()
 	{
-		if(Mobile.getPlatform().loadJar(jarFile))
+		if(Mobile.getPlatform().restartJar(jarFile, new Runnable()
 		{
-			settingsChanged();
-			Mobile.getPlatform().runJar();
-		}
-		else
+			public void run()
+			{
+				config.stop();
+				settingsChanged();
+				Mobile.getPlatform().runJar();
+			}
+		}))
 		{
-			System.out.println("Couldn't reload jar...");
+			return;
 		}
+		System.out.println("Couldn't reload jar...");
 	}
 
 	private void settingsChanged()

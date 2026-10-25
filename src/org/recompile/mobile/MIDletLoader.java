@@ -27,12 +27,8 @@ import java.io.IOException;
 import java.net.URL;
 import java.net.URLClassLoader;
 
-import java.lang.ClassLoader;
 import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
 
 import java.util.HashMap;
 import java.util.ArrayList;
@@ -59,7 +55,8 @@ public class MIDletLoader extends URLClassLoader
 	public String suitename;
 
 	private Class<?> mainClass;
-	private MIDlet mainInst;
+	private volatile MIDlet mainInst;
+	private final ThreadGroup midletThreads = new ThreadGroup("FreeJ2ME MIDlet");
 
 	private HashMap<String, String> properties = new HashMap<String, String>(32);
 
@@ -161,6 +158,171 @@ public class MIDletLoader extends URLClassLoader
 			e.printStackTrace();
 			System.exit(0);
 		}
+	}
+
+	public void launch()
+	{
+		Thread thread = new Thread(midletThreads, new Runnable()
+		{
+			public void run()
+			{
+				try
+				{
+					start();
+				}
+				catch (Exception e)
+				{
+					System.out.println("Error Running Jar");
+					e.printStackTrace();
+				}
+			}
+		}, "FreeJ2ME MIDlet");
+		thread.start();
+	}
+
+	public boolean stop()
+	{
+		PlatformPlayer.closeAll();
+		if(mainInst != null)
+		{
+			try
+			{
+				mainInst.destroyFromPlatform();
+				mainInst = null;
+			}
+			catch (Exception e)
+			{
+				System.out.println("Error Destroying MIDlet");
+				e.printStackTrace();
+				return false;
+			}
+		}
+		PlatformPlayer.closeAll();
+		if(!stopThreads())
+		{
+			return false;
+		}
+
+		try
+		{
+			close();
+		}
+		catch (IOException e)
+		{
+			System.out.println("Error Closing MIDlet Loader");
+			e.printStackTrace();
+		}
+		return true;
+	}
+
+	@SuppressWarnings({"deprecation", "removal"})
+	private boolean stopThreads()
+	{
+		Thread currentThread = Thread.currentThread();
+		Thread[] threads = getThreads();
+		for(Thread thread : threads)
+		{
+			if(thread != null && thread != currentThread && !isSharedRuntimeThread(thread))
+			{
+				thread.interrupt();
+			}
+		}
+
+		long gracefulDeadline = System.currentTimeMillis() + 500;
+		boolean interrupted = waitForThreads(threads, currentThread, gracefulDeadline);
+
+		long forceDeadline = System.currentTimeMillis() + 500;
+		while(System.currentTimeMillis() < forceDeadline)
+		{
+			threads = getThreads();
+			boolean hasRemainingThreads = false;
+			for(Thread thread : threads)
+			{
+				if(thread != null && thread != currentThread && !isSharedRuntimeThread(thread) && thread.isAlive())
+				{
+					hasRemainingThreads = true;
+					try
+					{
+						thread.stop();
+					}
+					catch (SecurityException e)
+					{
+						System.out.println("Unable to Stop MIDlet Thread: "+thread.getName());
+						e.printStackTrace();
+					}
+				}
+			}
+			if(!hasRemainingThreads)
+			{
+				break;
+			}
+			interrupted |= waitForThreads(threads, currentThread, Math.min(forceDeadline, System.currentTimeMillis() + 50));
+		}
+
+		threads = getThreads();
+		boolean stopped = true;
+		for(Thread thread : threads)
+		{
+			if(thread != null && thread != currentThread && !isSharedRuntimeThread(thread) && thread.isAlive())
+			{
+				stopped = false;
+				System.out.println("MIDlet Thread Still Running: "+thread.getName());
+			}
+		}
+		if(interrupted)
+		{
+			currentThread.interrupt();
+		}
+		return stopped;
+	}
+
+	private boolean isSharedRuntimeThread(Thread thread)
+	{
+		return thread.isDaemon() && "Java Sound Event Dispatcher".equals(thread.getName());
+	}
+
+	private Thread[] getThreads()
+	{
+		int size = Math.max(10, midletThreads.activeCount() * 2);
+		Thread[] threads;
+		int count;
+		do
+		{
+			threads = new Thread[size];
+			count = midletThreads.enumerate(threads, true);
+			size *= 2;
+		}
+		while(count == threads.length && size <= 65536);
+		return threads;
+	}
+
+	private boolean waitForThreads(Thread[] threads, Thread currentThread, long deadline)
+	{
+		boolean interrupted = false;
+		for(Thread thread : threads)
+		{
+			if(thread == null || thread == currentThread)
+			{
+				continue;
+			}
+			while(thread.isAlive())
+			{
+				long remaining = deadline - System.currentTimeMillis();
+				if(remaining <= 0)
+				{
+					break;
+				}
+				try
+				{
+					thread.join(remaining);
+				}
+				catch (InterruptedException e)
+				{
+					interrupted = true;
+				}
+			}
+		}
+		return interrupted;
 	}
 
 	private void loadManifest()

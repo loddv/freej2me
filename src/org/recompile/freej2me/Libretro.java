@@ -18,19 +18,12 @@ package org.recompile.freej2me;
 
 import org.recompile.mobile.*;
 
-import java.awt.Image;
-import java.awt.Canvas;
-import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Point;
 import java.awt.image.BufferedImage;
 
-import java.util.Arrays;
 import java.util.Timer;
 import java.util.TimerTask;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.io.BufferedOutputStream;
 import java.io.File;
 import java.net.URL;
 
@@ -372,15 +365,19 @@ public class Libretro
 
 	private void restartGame()
 	{
-		if(jarFile != null && Mobile.getPlatform().loadJar(jarFile))
+		if(jarFile != null && Mobile.getPlatform().restartJar(jarFile, new Runnable()
 		{
-			settingsChanged();
-			Mobile.getPlatform().runJar();
-		}
-		else
+			public void run()
+			{
+				config.stop();
+				settingsChanged();
+				Mobile.getPlatform().runJar();
+			}
+		}))
 		{
-			System.out.println("Couldn't reload jar...");
+			return;
 		}
+		System.out.println("Couldn't reload jar...");
 	}
 
 	private void settingsChanged()

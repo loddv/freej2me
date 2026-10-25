@@ -28,7 +28,6 @@ import java.io.BufferedWriter;
 import java.io.OutputStreamWriter;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.nio.file.Path;
 
 import javax.microedition.lcdui.Graphics;
 
@@ -369,7 +368,7 @@ public class Config
 				switch(itemid)
 				{
 					case 0: stop(); break; // resume
-					case 1: stop(); onRestart.run(); break; // restart
+					case 1: onRestart.run(); break; // restart
 					case 2: menuid=1; itemid=0; break; // display size
 					case 3: menuid=3; itemid=0; break; // sound
 					case 4: menuid=7; itemid=0; break; // fps

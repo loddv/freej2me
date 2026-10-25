@@ -30,7 +30,6 @@ import javax.microedition.media.Player;
 import javax.microedition.media.PlayerListener;
 
 import javax.microedition.media.Control;
-import javax.microedition.media.Controllable;
 
 public class PlatformPlayer implements Player
 {
@@ -44,6 +43,7 @@ public class PlatformPlayer implements Player
 	private Vector<PlayerListener> listeners;
 
 	private Control[] controls;
+	private static final Vector<PlatformPlayer> activePlayers = new Vector<PlatformPlayer>();
 
 	public PlatformPlayer(InputStream stream, String type)
 	{
@@ -101,6 +101,7 @@ public class PlatformPlayer implements Player
 		controls[0] = new volumeControl();
 		controls[1] = new tempoControl();
 		controls[2] = new midiControl();
+		registerPlayer();
 
 		//System.out.println("media type: "+type);
 	}
@@ -111,19 +112,53 @@ public class PlatformPlayer implements Player
 		listeners = new Vector<PlayerListener>();
 		controls = new Control[3];
 		System.out.println("Player locator: "+locator);
+		registerPlayer();
 	}
 
+	private void registerPlayer()
+	{
+		synchronized(activePlayers)
+		{
+			activePlayers.add(this);
+		}
+	}
+
+	private void unregisterPlayer()
+	{
+		synchronized(activePlayers)
+		{
+			activePlayers.remove(this);
+		}
+	}
+
+	public static void closeAll()
+	{
+		PlatformPlayer[] players;
+		synchronized(activePlayers)
+		{
+			players = activePlayers.toArray(new PlatformPlayer[activePlayers.size()]);
+		}
+
+		for(PlatformPlayer platformPlayer : players)
+		{
+			platformPlayer.deallocate();
+		}
+	}
 
 	public void close()
 	{
 		try
 		{
-			player.stop();
+			if(player != null)
+			{
+				player.deallocate();
+			}
 			state = Player.CLOSED;
 			notifyListeners(PlayerListener.CLOSED, null);	
 		}
 		catch (Exception e) { }
-		state = Player.CLOSED;	
+		state = Player.CLOSED;
+		unregisterPlayer();
 	}
 
 	public int getState()
@@ -177,9 +212,18 @@ public class PlatformPlayer implements Player
 
 	public void deallocate()
 	{
-		stop();
-		player.deallocate();
-		state = Player.CLOSED;
+		try
+		{
+			if(player != null)
+			{
+				player.deallocate();
+			}
+		}
+		finally
+		{
+			state = Player.CLOSED;
+			unregisterPlayer();
+		}
 	}
 
 	public String getContentType() { return contentType; }
@@ -287,7 +331,11 @@ public class PlatformPlayer implements Player
 		}
 		public void deallocate()
 		{
-			midi.close();
+			if(midi != null)
+			{
+				midi.stop();
+				midi.close();
+			}
 		}
 
 		public void setLoopCount(int count)
@@ -409,6 +457,23 @@ public class PlatformPlayer implements Player
 		public boolean isRunning()
 		{
 			return wavClip.isRunning();
+		}
+
+		public void deallocate()
+		{
+			if(wavClip != null)
+			{
+				wavClip.stop();
+				wavClip.close();
+			}
+			try
+			{
+				if(wavStream != null)
+				{
+					wavStream.close();
+				}
+			}
+			catch (IOException e) { }
 		}
 	}
 

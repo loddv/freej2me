@@ -29,7 +29,8 @@ public abstract class MIDlet
 
 	public static HashMap<String, String> properties;
 
-	private Display display = new Display();
+	private final Display display = new Display();
+	private boolean destroyingFromPlatform;
 
 	protected MIDlet()
 	{
@@ -46,6 +47,25 @@ public abstract class MIDlet
 
 	protected abstract void destroyApp(boolean unconditional) throws MIDletStateChangeException;
 
+	public final void destroyFromPlatform() throws MIDletStateChangeException
+	{
+		boolean wasDestroyingFromPlatform = destroyingFromPlatform;
+		destroyingFromPlatform = true;
+		boolean destroyed = false;
+		try
+		{
+			destroyApp(true);
+			destroyed = true;
+		}
+		finally
+		{
+			if(!destroyed)
+			{
+				destroyingFromPlatform = wasDestroyingFromPlatform;
+			}
+		}
+	}
+
 	public String getAppProperty(String key)
 	{ 
 		return properties.get(key);
@@ -59,7 +79,10 @@ public abstract class MIDlet
 	public final void notifyDestroyed()
 	{ 
 		System.out.println("MIDlet sent Destroyed Notification");
-		System.exit(0);
+		if(!destroyingFromPlatform)
+		{
+			System.exit(0);
+		}
 	}
 
 	public final void notifyPaused() { }

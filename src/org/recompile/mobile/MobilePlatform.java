@@ -17,12 +17,7 @@
 package org.recompile.mobile;
 
 import java.net.URL;
-import java.io.InputStream;
 
-import java.awt.event.KeyEvent;
-
-import javax.microedition.lcdui.Display;
-import javax.microedition.lcdui.Canvas;
 import javax.microedition.lcdui.game.GameCanvas;
 import javax.microedition.lcdui.Image;
 import javax.microedition.m3g.Graphics3D;
@@ -44,7 +39,8 @@ public class MobilePlatform
 	public int lcdWidth;
 	public int lcdHeight;
 
-	public MIDletLoader loader;
+	public volatile MIDletLoader loader;
+	private volatile boolean restartInProgress;
 
 	public Runnable painter;
 
@@ -150,11 +146,20 @@ public class MobilePlatform
 	******** Jar Loading ********
 */
 
-	public boolean loadJar(String jarurl)
+	public synchronized boolean loadJar(String jarurl)
 	{
+		if(restartInProgress)
+		{
+			return false;
+		}
+
 		try
 		{
 			URL jar = new URL(jarurl);
+			if(loader != null && !loader.stop())
+			{
+				return false;
+			}
 			loader = new MIDletLoader(new URL[]{jar});
 			return true;
 		}
@@ -167,11 +172,81 @@ public class MobilePlatform
 
 	}
 
+	/**
+	 * Restarts a MIDlet without blocking the thread that handles the interface.
+	 * The callback is invoked only after the old MIDlet has stopped and the new
+	 * loader has been created.
+	 */
+	public synchronized boolean restartJar(final String jarurl, final Runnable onLoaded)
+	{
+		if(restartInProgress)
+		{
+			return false;
+		}
+
+		final URL jar;
+		try
+		{
+			jar = new URL(jarurl);
+		}
+		catch (Exception e)
+		{
+			System.out.println("Couldn't reload jar...");
+			e.printStackTrace();
+			return false;
+		}
+
+		restartInProgress = true;
+		Thread restartThread = new Thread(new Runnable()
+		{
+			public void run()
+			{
+				try
+				{
+					MIDletLoader oldLoader = loader;
+					PlatformPlayer.closeAll();
+					if(oldLoader != null && !oldLoader.stop())
+					{
+						System.out.println("Couldn't stop the previous MIDlet; restart cancelled");
+						return;
+					}
+
+					synchronized(MobilePlatform.this)
+					{
+						loader = null;
+					}
+					MIDletLoader newLoader = new MIDletLoader(new URL[]{jar});
+					synchronized(MobilePlatform.this)
+					{
+						loader = newLoader;
+					}
+
+					if(onLoaded != null)
+					{
+						onLoaded.run();
+					}
+				}
+				catch (Exception e)
+				{
+					System.out.println("Couldn't reload jar...");
+					e.printStackTrace();
+				}
+				finally
+				{
+					restartInProgress = false;
+				}
+			}
+		}, "FreeJ2ME Restart");
+		restartThread.setDaemon(true);
+		restartThread.start();
+		return true;
+	}
+
 	public void runJar()
 	{
 		try
 		{
-			loader.start();
+			loader.launch();
 		}
 		catch (Exception e)
 		{
