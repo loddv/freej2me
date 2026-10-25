@@ -20,6 +20,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.IOException;
 
 public class Connector
 {
@@ -28,21 +29,52 @@ public class Connector
 	public static final int READ_WRITE = 3;
 	public static final int WRITE = 2;
 
-/*
+	public static Connection open(String name) throws IOException
+	{
+		return open(name, READ_WRITE, false);
+	}
 
-	public static Connection open(String name) {  }
+	public static Connection open(String name, int mode) throws IOException
+	{
+		return open(name, mode, false);
+	}
 
-	public static Connection open(String name, int mode) {  }
+	public static Connection open(String name, int mode, boolean timeouts) throws IOException
+	{
+		if(mode != READ && mode != WRITE && mode != READ_WRITE)
+		{
+			throw new IllegalArgumentException("Invalid connection mode: " + mode);
+		}
+		if(name == null)
+		{
+			throw new NullPointerException("name");
+		}
 
-	public static Connection open(String name, int mode, boolean timeouts) {  }
+		if(name.regionMatches(true, 0, "file:", 0, 5))
+		{
+			return new javax.microedition.io.file.FileConnectionImpl(name, mode);
+		}
+		throw new ConnectionNotFoundException("Unsupported connection protocol: " + name);
+	}
 
-	public static DataInputStream openDataInputStream(String name) {  }
+	public static DataInputStream openDataInputStream(String name) throws IOException
+	{
+		return ((InputConnection)open(name, READ)).openDataInputStream();
+	}
 
-	public static DataOutputStream openDataOutputStream(String name) {  }
+	public static DataOutputStream openDataOutputStream(String name) throws IOException
+	{
+		return ((OutputConnection)open(name, WRITE)).openDataOutputStream();
+	}
 
-	public static InputStream openInputStream(String name) {  }
+	public static InputStream openInputStream(String name) throws IOException
+	{
+		return ((InputConnection)open(name, READ)).openInputStream();
+	}
 
-	public static OutputStream openOutputStream(String name) {  }
-*/
+	public static OutputStream openOutputStream(String name) throws IOException
+	{
+		return ((OutputConnection)open(name, WRITE)).openOutputStream();
+	}
 
 }

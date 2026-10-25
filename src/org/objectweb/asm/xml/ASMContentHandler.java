@@ -323,7 +323,7 @@ public class ASMContentHandler extends DefaultHandler implements Opcodes {
     static {
         String[] types = SAXCodeAdapter.TYPES;
         for (int i = 0; i < types.length; i++) {
-            TYPES.put(types[i], new Integer(i));
+            TYPES.put(types[i], Integer.valueOf(i));
         }
     }
 

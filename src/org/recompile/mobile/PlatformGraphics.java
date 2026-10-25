@@ -56,6 +56,7 @@ public class PlatformGraphics extends javax.microedition.lcdui.Graphics implemen
 		clipWidth = canvas.getWidth();
 		clipHeight = canvas.getHeight();
 
+		setColor(0,0,0);
 		gc.setBackground(new Color(0, 0, 0, 0));
 		gc.setFont(font.platformFont.awtFont);
 	}
@@ -104,8 +105,8 @@ public class PlatformGraphics extends javax.microedition.lcdui.Graphics implemen
 	{
 		try
 		{
-			int imgWidth = image.platformImage.width;
-			int imgHeight = image.platformImage.height;
+			int imgWidth = image.getWidth();
+			int imgHeight = image.getHeight();
 
 			x = AnchorX(x, imgWidth, anchor);
 			y = AnchorY(y, imgHeight, anchor);
@@ -114,13 +115,20 @@ public class PlatformGraphics extends javax.microedition.lcdui.Graphics implemen
 		}
 		catch (Exception e)
 		{
-			//System.out.println("drawImage A:"+e.getMessage());
+			System.out.println("drawImage A:"+e.getMessage());
 		}
 	}
 
 	public void drawImage(Image image, int x, int y)
 	{
-		gc.drawImage(image.platformImage.getCanvas(), x, y, null);
+		try
+		{
+			gc.drawImage(image.platformImage.getCanvas(), x, y, null);	
+		}
+		catch (Exception e)
+		{
+			System.out.println("drawImage B:"+e.getMessage());
+		}
 	}
 
 	public void drawImage(BufferedImage image, int x, int y)
@@ -132,7 +140,7 @@ public class PlatformGraphics extends javax.microedition.lcdui.Graphics implemen
 		}
 		catch (Exception e)
 		{
-			//System.out.println("drawImage B:"+e.getMessage());
+			System.out.println("drawImage C:"+e.getMessage());
 		}
 	}
 
@@ -321,11 +329,17 @@ public class PlatformGraphics extends javax.microedition.lcdui.Graphics implemen
 		return yout;
 	}
 
+	public void setAlphaRGB(int ARGB)
+	{
+		gc.setColor(new Color(ARGB, true));
+	}
+
 	/*
 		****************************
 			Nokia Direct Graphics
 		****************************
 	*/
+	// http://www.j2megame.org/j2meapi/Nokia_UI_API_1_1/com/nokia/mid/ui/DirectGraphics.html
 
 	private int colorAlpha;
 
@@ -350,13 +364,59 @@ public class PlatformGraphics extends javax.microedition.lcdui.Graphics implemen
 
 	public void drawPixels(byte[] pixels, byte[] transparencyMask, int offset, int scanlength, int x, int y, int width, int height, int manipulation, int format)
 	{
-		System.out.println("drawPixels A");
-		//drawRGB(pixels, offset, scanlength, x, y, width, height, true);
+		//System.out.println("drawPixels A"); // Found In Use
+		
+		int[] Type1 = {0xFFFFFFFF, 0xFF000000, 0x00FFFFFF, 0x00000000};
+		int c = 0;
+		int[] data;
+		BufferedImage temp;
+		switch(format)
+		{
+			case -1: // TYPE_BYTE_1_GRAY_VERTICAL // used by Monkiki's Castles
+				data = new int[pixels.length*8];
+				int row = 0;
+				int col = 0;
+				for(int b = (offset/8); b<pixels.length; b++)
+				{
+					for(int j=0; j<8; j++)
+					{
+						c = ((pixels[b]>>j)&1);
+						if(transparencyMask!=null) { c |= (((transparencyMask[b]>>j)&1)^1)<<1; }
+						data[((row+j)*width)+col] = Type1[c];
+					}
+					col++;
+					if(col==width) { col=0; row+=8; }
+				}
+
+				temp = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+				temp.setRGB(0, 0, width, height, data, 0, scanlength);
+				drawImage(manipulateImage(temp, manipulation), x, y);
+			break;
+
+			case 1: // TYPE_BYTE_1_GRAY // used by Monkiki's Castles
+				data = new int[pixels.length*8];
+
+				for(int i=(offset/8); i<pixels.length; i++)
+				{
+					for(int j=7; j>=0; j--)
+					{
+						c = ((pixels[i]>>j)&1);
+						if(transparencyMask!=null) { c |= (((transparencyMask[i]>>j)&1)^1)<<1; }
+						data[(i*8)+(7-j)] = Type1[c];
+					}
+				}
+				temp = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+				temp.setRGB(0, 0, width, height, data, 0, scanlength);
+				drawImage(manipulateImage(temp, manipulation), x, y);
+			break;
+
+			default: System.out.println("drawPixels A : Format " + format + " Not Implemented");
+		}
 	}
 
 	public void drawPixels(int[] pixels, boolean transparency, int offset, int scanlength, int x, int y, int width, int height, int manipulation, int format)
 	{
-		//System.out.println("drawPixels B"); // Found In Use
+		//System.out.println("drawPixels B"+format); // Found In Use
 		BufferedImage temp = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
 		temp.setRGB(0, 0, width, height, pixels, offset, scanlength);
 		BufferedImage temp2 = manipulateImage(temp, manipulation);
@@ -365,7 +425,7 @@ public class PlatformGraphics extends javax.microedition.lcdui.Graphics implemen
 
 	public void drawPixels(short[] pixels, boolean transparency, int offset, int scanlength, int x, int y, int width, int height, int manipulation, int format)
 	{
-		//System.out.println("drawPixels C"); // Found In Use
+		//System.out.println("drawPixels C"+format); // Found In Use
 		int[] data = new int[pixels.length];
 
 		for(int i=0; i<pixels.length; i++)
@@ -424,7 +484,7 @@ public class PlatformGraphics extends javax.microedition.lcdui.Graphics implemen
 
 	public void getPixels(byte[] pixels, byte[] transparencyMask, int offset, int scanlength, int x, int y, int width, int height, int format)
 	{
-		System.out.println("getPixels A");
+		//System.out.println("getPixels A");
 	}
 
 	public void getPixels(int[] pixels, int offset, int scanlength, int x, int y, int width, int height, int format)
@@ -456,7 +516,8 @@ public class PlatformGraphics extends javax.microedition.lcdui.Graphics implemen
 		switch(format)
 		{
 			case DirectGraphics.TYPE_USHORT_1555_ARGB:
-				a = (c>>15) & 0x01; r = (c>>10) & 0x1F; g = (c>>5) & 0x1F; b = c & 0x1F;
+				a = ((c>>15) & 0x01)*0xFF;
+				r = (c>>10) & 0x1F; g = (c>>5) & 0x1F; b = c & 0x1F;
 				r = (r<<3)|(r>>2); g = (g<<3)|(g>>2); b = (b<<3)|(b>>2);
 				break;
 			case DirectGraphics.TYPE_USHORT_444_RGB:
@@ -497,8 +558,8 @@ public class PlatformGraphics extends javax.microedition.lcdui.Graphics implemen
 				out=(r<<8)|(g<<4)|b;
 				break;
 			case DirectGraphics.TYPE_USHORT_4444_ARGB:
-				a=c>>>28; r=((c>>20)&0xF); g=((c>>12)&0xF); b=((c>>4)&0xF);
-				out=(0xF000)|(r<<8)|(g<<4)|b;
+				a=((c>>>28)&0xF); r=((c>>20)&0xF); g=((c>>12)&0xF); b=((c>>4)&0xF);
+				out=(a<<12)|(r<<8)|(g<<4)|b;
 				break;
 			case DirectGraphics.TYPE_USHORT_555_RGB:
 				r=((c>>19)&0x1F); g=((c>>11)&0x1F); b=((c>>3)&0x1F);
@@ -515,20 +576,23 @@ public class PlatformGraphics extends javax.microedition.lcdui.Graphics implemen
 	private BufferedImage manipulateImage(BufferedImage image, int manipulation)
 	{
 		final int HV = DirectGraphics.FLIP_HORIZONTAL | DirectGraphics.FLIP_VERTICAL;
+		final int H90 = DirectGraphics.FLIP_HORIZONTAL | DirectGraphics.ROTATE_90;
 		switch(manipulation)
 		{
 			case DirectGraphics.FLIP_HORIZONTAL:
 				return PlatformImage.transformImage(image, Sprite.TRANS_MIRROR);
-			case DirectGraphics.FLIP_VERTICAL:
+			case DirectGraphics.FLIP_VERTICAL: 
 				return PlatformImage.transformImage(image, Sprite.TRANS_MIRROR_ROT180);
-			case DirectGraphics.ROTATE_90:
+			case DirectGraphics.ROTATE_90: 
 				return PlatformImage.transformImage(image, Sprite.TRANS_ROT90);
 			case DirectGraphics.ROTATE_180:
 				return PlatformImage.transformImage(image, Sprite.TRANS_ROT180);
 			case DirectGraphics.ROTATE_270:
 				return PlatformImage.transformImage(image, Sprite.TRANS_ROT270);
-			case HV:
+			case HV: 
 				return PlatformImage.transformImage(image, Sprite.TRANS_ROT180);
+			case H90: 
+				return PlatformImage.transformImage(PlatformImage.transformImage(image, Sprite.TRANS_MIRROR), Sprite.TRANS_ROT270);
 		}
 		return image;
 	}

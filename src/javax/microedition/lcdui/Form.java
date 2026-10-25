@@ -16,20 +16,23 @@
 */
 package javax.microedition.lcdui;
 
+import org.recompile.mobile.Mobile;
+import org.recompile.mobile.PlatformImage;
+import org.recompile.mobile.PlatformGraphics;
+
 import java.util.ArrayList;
 
 
 public class Form extends Screen
 {
 
-	ArrayList<Item> items;
-
-	ItemStateListener listener;
-
+	public ItemStateListener listener;
 
 	public Form(String title)
 	{
 		setTitle(title);
+		platformImage = new PlatformImage(width, height);
+		render();
 	}
 
 	public Form(String title, Item[] itemarray)
@@ -43,18 +46,20 @@ public class Form extends Screen
 				items.add(itemarray[i]);
 			}
 		}
+		platformImage = new PlatformImage(width, height);
+		render();
 	}
 
 
-	public int append(Image img) { items.add(new ImageItem("",img,0,"")); return items.size()-1; }
+	public int append(Image img) { items.add(new ImageItem("",img,0,"")); render(); return items.size()-1;  }
 
-	public int append(Item item) { items.add(item); return items.size()-1; }
+	public int append(Item item) { items.add(item);  render(); return items.size()-1; }
 
-	public int append(String str) { items.add(new StringItem("",str)); return items.size()-1; }
+	public int append(String str) { items.add(new StringItem("",str)); render(); return items.size()-1;  }
 
-	public void delete(int itemNum) { items.remove(itemNum); }
+	public void delete(int itemNum) { items.remove(itemNum); render(); }
 
-	public void deleteAll() { items.clear(); }
+	public void deleteAll() { items.clear(); render(); }
 
 	public Item get(int itemNum) { return items.get(itemNum); }
 
@@ -62,12 +67,45 @@ public class Form extends Screen
 
 	public int getWidth() { return 64; }
 
-	public void insert(int itemNum, Item item) { items.add(itemNum, item); }
+	public void insert(int itemNum, Item item) { items.add(itemNum, item); render(); }
 
-	public void set(int itemNum, Item item) { items.set(itemNum, item); }
+	public void set(int itemNum, Item item) { items.set(itemNum, item); render(); }
 
 	public void setItemStateListener(ItemStateListener iListener) { listener = iListener; }
 
 	public int size() { return items.size(); }
+
+	/*
+		Draw form, handle input
+	*/
+
+	public void keyPressed(int key)
+	{
+		if(listCommands==true)
+		{
+			keyPressedCommands(key);
+			return;
+		}
+
+		if(items.size()<1) { return; }
+		switch(key)
+		{
+			case Mobile.KEY_NUM2: currentItem--; break;
+			case Mobile.KEY_NUM8: currentItem++; break;
+			case Mobile.NOKIA_UP: currentItem--; break;
+			case Mobile.NOKIA_DOWN: currentItem++; break;
+			case Mobile.NOKIA_SOFT1: doLeftCommand(); break;
+			case Mobile.NOKIA_SOFT2: doRightCommand(); break;
+			case Mobile.KEY_NUM5: doDefaultCommand(); break;
+		}
+		if (currentItem>=items.size()) { currentItem=0; }
+		if (currentItem<0) { currentItem = items.size()-1; }
+		render();
+	}
+
+	public void notifySetCurrent()
+	{
+		render();
+	}
 
 }

@@ -28,17 +28,24 @@ public class Command
 	public static final int EXIT = 7;
 	public static final int ITEM = 8;
 
-	String label;
+	private static final String[] labels = {"-","SCR","Back","Cancel","OK","Help","Stop","Exit","Item"};
 
-	String shortLabel;
+	private String label;
 
-	int type;
+	private String shortLabel;
 
-	int priority;
+	private int type;
+
+	private int priority;
 
 
 	public Command(String text, int cmdType, int cmdPriority)
 	{
+		if(text.equals(""))
+		{
+			text = "---";
+			if(cmdType>=0 && cmdType<=8) { text = labels[cmdType]; }
+		}
 		label = text;
 		type = cmdType;
 		priority = cmdPriority;
@@ -47,6 +54,13 @@ public class Command
 
 	public Command(String shorttext, String text, int cmdType, int cmdPriority)
 	{
+		if(text.equals(""))
+		{
+			text = "---";
+			if(cmdType>=0 && cmdType<=8) { text = labels[cmdType]; }
+		}
+		if(shorttext.equals("")) { shorttext = text; }
+
 		label = text;
 		type = cmdType;
 		priority = cmdPriority;

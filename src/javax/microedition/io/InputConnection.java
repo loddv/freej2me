@@ -18,12 +18,13 @@ package javax.microedition.io;
 
 import java.io.InputStream;
 import java.io.DataInputStream;
+import java.io.IOException;
 
 public interface InputConnection extends Connection
 {
 
-	public DataInputStream openDataInputStream();
+	public DataInputStream openDataInputStream() throws IOException;
 
-	public InputStream openInputStream();
+	public InputStream openInputStream() throws IOException;
 
 }

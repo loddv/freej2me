@@ -131,9 +131,11 @@ public class Display
 	{
 		try
 		{
+			next.showNotify();
 			current = next;
+			current.notifySetCurrent();
 			Mobile.getPlatform().flushGraphics(current.platformImage, 0,0, current.width, current.height);
-			System.out.println("Set Current "+current.width+", "+current.height);
+			//System.out.println("Set Current "+current.width+", "+current.height);
 		}
 		catch (Exception e)
 		{

@@ -18,11 +18,10 @@ package org.recompile.mobile;
 
 import java.io.File;
 import java.io.InputStream;
-import javax.imageio.ImageIO;
-import java.lang.Exception;
-import java.util.Date;
 import java.text.SimpleDateFormat;
+import java.util.Date;
 
+import javax.imageio.ImageIO;
 import javax.microedition.lcdui.Display;
 import javax.microedition.lcdui.Canvas;
 import javax.microedition.m3g.Graphics3D;

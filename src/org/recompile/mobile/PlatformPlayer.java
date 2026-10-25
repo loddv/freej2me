@@ -84,9 +84,14 @@ public class PlatformPlayer implements Player
 
 	public void close()
 	{
-		player.stop();
-		state = Player.CLOSED;
-		notifyListeners(PlayerListener.CLOSED, null);
+		try
+		{
+			player.stop();
+			state = Player.CLOSED;
+			notifyListeners(PlayerListener.CLOSED, null);	
+		}
+		catch (Exception e) { }
+		state = Player.CLOSED;	
 	}
 
 	public int getState()
@@ -253,7 +258,7 @@ public class PlatformPlayer implements Player
 		private Clip wavClip;
 
 		private int loops = 0;
-
+        @Deprecated
 		private Long time = new Long(0);
 
 		public wavPlayer(InputStream stream)

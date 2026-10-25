@@ -31,3 +31,7 @@ Development thread:
   - Get as many games as possible to work well.
   - Document games that work well in the wiki
   - Reduce as many bugs as possible
+
+## JSR-75 file connections
+
+The emulator provides `javax.microedition.io.file.FileConnection` through `Connector.open()` for `file:///root1/...` URLs. Each MIDlet suite's files are stored under `files/<suite>/root1` relative to the emulator's working directory; `FileSystemRegistry.listRoots()` reports the available `root1/` root. File URLs are confined to that suite's storage, and non-file Connector protocols are not implemented.

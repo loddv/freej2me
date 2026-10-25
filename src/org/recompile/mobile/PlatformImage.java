@@ -50,6 +50,7 @@ public class PlatformImage extends javax.microedition.lcdui.Image
 	protected void createGraphics()
 	{
 		gc = new PlatformGraphics(this);
+		gc.setColor(0x000000);
 	}
 
 	public PlatformImage(int Width, int Height)
@@ -63,6 +64,7 @@ public class PlatformImage extends javax.microedition.lcdui.Image
 
 		gc.setColor(0xFFFFFF);
 		gc.fillRect(0, 0, width, height);
+		gc.setColor(0x000000);
 
 		platformImage = this;
 	}
@@ -205,6 +207,11 @@ public class PlatformImage extends javax.microedition.lcdui.Image
 		canvas.getRGB(x, y, width, height, rgbData, offset, scanlength);
 	}
 
+	public int getARGB(int x, int y)
+	{
+		return canvas.getRGB(x, y);
+	}
+
 	public static BufferedImage transformImage(BufferedImage image, int transform)
 	{
 		int width = (int)image.getWidth();
@@ -215,34 +222,34 @@ public class PlatformImage extends javax.microedition.lcdui.Image
 		AffineTransform af = new AffineTransform();
 
 		switch (transform) {
-			case Sprite.TRANS_NONE: {
+			case Sprite.TRANS_NONE:
 				break;
-			}
-			case Sprite.TRANS_ROT90: {
-				af.translate(height, 0);
-				af.rotate(Math.PI / 2);
-				out_width = height;
-				out_height = width;
-				break;
-			}
-			case Sprite.TRANS_ROT180: {
-				af.translate(width, height);
-				af.rotate(Math.PI);
-				break;
-			}
-			case Sprite.TRANS_ROT270: {
+
+			case Sprite.TRANS_ROT90: 
 				af.translate(0, width);
 				af.rotate(Math.PI * 3 / 2);
 				out_width = height;
 				out_height = width;
 				break;
-			}
-			case Sprite.TRANS_MIRROR: {
+
+			case Sprite.TRANS_ROT180: 
+				af.translate(width, height);
+				af.rotate(Math.PI);
+				break;
+			
+			case Sprite.TRANS_ROT270:
+				af.translate(height, 0);
+				af.rotate(Math.PI / 2);
+				out_width = height;
+				out_height = width;
+				break;
+
+			case Sprite.TRANS_MIRROR: 
 				af.translate(width, 0);
 				af.scale(-1, 1);
 				break;
-			}
-			case Sprite.TRANS_MIRROR_ROT90: {
+
+			case Sprite.TRANS_MIRROR_ROT90: 
 				af.translate(width, 0);
 				af.scale(-1, 1);
 				af.translate(height, 0);
@@ -250,15 +257,15 @@ public class PlatformImage extends javax.microedition.lcdui.Image
 				out_width = height;
 				out_height = width;
 				break;
-			}
-			case Sprite.TRANS_MIRROR_ROT180: {
+
+			case Sprite.TRANS_MIRROR_ROT180: 
 				af.translate(width, 0);
 				af.scale(-1, 1);
 				af.translate(width, height);
 				af.rotate(Math.PI);
 				break;
-			}
-			case Sprite.TRANS_MIRROR_ROT270: {
+
+			case Sprite.TRANS_MIRROR_ROT270: 
 				af.translate(height, 0);
 				af.rotate(Math.PI * 3 / 2);
 				af.translate(width, 0);
@@ -266,9 +273,7 @@ public class PlatformImage extends javax.microedition.lcdui.Image
 				out_width = height;
 				out_height = width;
 				break;
-			}
 		}
-
 
 		BufferedImage transimage = new BufferedImage(out_width, out_height, BufferedImage.TYPE_INT_ARGB);
 		Graphics2D gc = transimage.createGraphics();

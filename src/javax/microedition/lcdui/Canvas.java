@@ -60,19 +60,19 @@ public abstract class Canvas extends Displayable
 	{
 		switch(keyCode)
 		{
-			case Mobile.KEY_NUM2: return Mobile.GAME_UP;
-			case Mobile.KEY_NUM8: return Mobile.GAME_DOWN;
-			case Mobile.KEY_NUM4: return Mobile.GAME_LEFT;
-			case Mobile.KEY_NUM6: return Mobile.GAME_RIGHT;
-			case Mobile.KEY_NUM5: return Mobile.GAME_FIRE;
-			case Mobile.KEY_NUM1: return Mobile.GAME_A;
-			case Mobile.KEY_NUM3: return Mobile.GAME_B;
-			case Mobile.KEY_NUM7: return Mobile.GAME_C;
-			case Mobile.KEY_NUM9: return Mobile.GAME_D;
-			case Mobile.NOKIA_UP: return Mobile.GAME_UP;
-			case Mobile.NOKIA_DOWN: return Mobile.GAME_DOWN;
-			case Mobile.NOKIA_LEFT: return Mobile.GAME_LEFT;
-			case Mobile.NOKIA_RIGHT: return Mobile.GAME_RIGHT;
+			case Mobile.KEY_NUM2: return UP;
+			case Mobile.KEY_NUM8: return DOWN;
+			case Mobile.KEY_NUM4: return LEFT;
+			case Mobile.KEY_NUM6: return RIGHT;
+			case Mobile.KEY_NUM5: return FIRE;
+			case Mobile.KEY_NUM1: return GAME_A;
+			case Mobile.KEY_NUM3: return GAME_B;
+			case Mobile.KEY_NUM7: return GAME_C;
+			case Mobile.KEY_NUM9: return GAME_D;
+			case Mobile.NOKIA_UP: return UP;
+			case Mobile.NOKIA_DOWN: return DOWN;
+			case Mobile.NOKIA_LEFT: return LEFT;
+			case Mobile.NOKIA_RIGHT: return RIGHT;
 		}
 		return 0;
 	}
@@ -134,7 +134,7 @@ public abstract class Canvas extends Displayable
 
 	public boolean hasRepeatEvents() { return false; }
 
-	protected void hideNotify() { }
+	public void hideNotify() { }
 
 	public boolean isDoubleBuffered() { return true; }
 
@@ -179,7 +179,7 @@ public abstract class Canvas extends Displayable
 
 	public void setFullScreenMode(boolean mode)
 	{
-		//System.out.print("Set Canvas Full Screen Mode ");
+		System.out.print("Set Canvas Full Screen Mode ");
 		fullScreen = mode;
 		if(fullScreen)
 		{
@@ -188,12 +188,14 @@ public abstract class Canvas extends Displayable
 		}
 	}
 
-	protected void showNotify() { }
+	public void showNotify() { }
 
 	protected void sizeChanged(int w, int h)
 	{
 		width = w;
 		height = h;
 	}
+
+	public void notifySetCurrent() { repaint(); }
 
 }

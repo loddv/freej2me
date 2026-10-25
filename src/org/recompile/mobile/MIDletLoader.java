@@ -71,7 +71,8 @@ public class MIDletLoader extends URLClassLoader
 			System.setProperty("microedition.platform", "j2me");
 			System.setProperty("microedition.profiles", "MIDP-2.0");
 			System.setProperty("microedition.configuration", "CLDC-1.0");
-			System.setProperty("microedition.locale", "en-US");
+			// System.setProperty("microedition.locale", "en-US");
+			System.setProperty("microedition.locale", "pt-BR");
 			System.setProperty("microedition.encoding", "file.encoding");
 		}
 		catch (Exception e)
@@ -86,12 +87,11 @@ public class MIDletLoader extends URLClassLoader
 			properties.put("microedition.platform", "j2me");
 			properties.put("microedition.profiles", "MIDP-2.0");
 			properties.put("microedition.configuration", "CLDC-1.0");
-			properties.put("microedition.locale", "en-US");
+			// properties.put("microedition.locale", "en-US");
+			properties.put("microedition.locale", "pt-BR");
 			properties.put("microedition.encoding", "file.encoding");
 		}
-		catch (Exception e)
-		{
-			System.out.println("Can't Read Manifest!");
+		catch (Exception e) {
 			return;
 		}
 
@@ -295,7 +295,7 @@ public class MIDletLoader extends URLClassLoader
 		if(
 			name.startsWith("java.") || name.startsWith("javax.") || name.startsWith("com.nokia") ||
 			name.startsWith("com.mascotcapsule") || name.startsWith("com.samsung") || name.startsWith("sun.") ||
-			name.startsWith("org.recompile")
+			name.startsWith("com.siemens") || name.startsWith("org.recompile")
 			)
 		{
 			return loadClass(name, true);
