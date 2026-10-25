@@ -48,6 +48,7 @@ public class Libretro
 	private boolean useSiemensControls = false;
 	private boolean useMotorolaControls = false;
 	private boolean rotateDisplay = false;
+	private int rotation = 0;
 	private boolean soundEnabled = true;
 	private int limitFPS = 0;
 
@@ -88,7 +89,8 @@ public class Libretro
 		lcdWidth =  Integer.parseInt(args[0]);
 		lcdHeight = Integer.parseInt(args[1]);
 
-		if(Integer.parseInt(args[2]) == 1) { rotateDisplay = true; }
+		rotation = Integer.parseInt(args[2]) == 1 ? 90 : 0;
+		rotateDisplay = rotation != 0;
 
 		if(Integer.parseInt(args[3]) == 1)      { useNokiaControls = true;    }
 		else if(Integer.parseInt(args[3]) == 2) { useSiemensControls = true;  }
@@ -262,8 +264,7 @@ public class Libretro
 										config.settings.put("width",  ""+lcdWidth);
 										config.settings.put("height", ""+lcdHeight);
 
-										if(rotateDisplay)   { config.settings.put("rotate", "on");  }
-										if(!rotateDisplay)  { config.settings.put("rotate", "off"); }
+										config.settings.put("rotation", ""+rotation);
 
 										if(useNokiaControls)         { config.settings.put("phone", "Nokia");    }
 										else if(useSiemensControls)  { config.settings.put("phone", "Siemens");  }
@@ -317,8 +318,7 @@ public class Libretro
 									config.settings.put("width",  ""+Integer.parseInt(cfgtokens[1]));
 									config.settings.put("height", ""+Integer.parseInt(cfgtokens[2]));
 
-									if(Integer.parseInt(cfgtokens[3])==1) { config.settings.put("rotate", "on");  }
-									if(Integer.parseInt(cfgtokens[3])==0) { config.settings.put("rotate", "off"); }
+									config.settings.put("rotation", Integer.parseInt(cfgtokens[3]) == 1 ? "90" : "0");
 
 									if(Integer.parseInt(cfgtokens[4])==0) { config.settings.put("phone", "Standard"); }
 									if(Integer.parseInt(cfgtokens[4])==1) { config.settings.put("phone", "Nokia");    }
@@ -365,7 +365,6 @@ public class Libretro
 										frameHeader[2] = (byte)((lcdWidth)&0xFF);
 										frameHeader[3] = (byte)((lcdHeight>>8)&0xFF);
 										frameHeader[4] = (byte)((lcdHeight)&0xFF);
-										//frameHeader[5] = rotate - set from config
 										System.out.write(frameHeader, 0, 6);
 										System.out.write(frameBuffer, 0, bufferLength);
 										System.out.flush();
@@ -410,9 +409,11 @@ public class Libretro
 		if(phone.equals("Siemens")) { Mobile.siemens = true; useSiemensControls = true; }
 		if(phone.equals("Motorola")) { Mobile.motorola = true; useMotorolaControls = true; }
 
-		String rotate = config.settings.get("rotate");
-		if(rotate.equals("on")) { rotateDisplay = true; frameHeader[5] = (byte)1; }
-		if(rotate.equals("off")) { rotateDisplay = false; frameHeader[5] = (byte)0; }
+		String invertDimesions = config.settings.get("invertDimesions");
+		int rotationSetting = Integer.parseInt(config.settings.get("rotation"));
+		rotation = (rotationSetting + ("on".equals(invertDimesions) ? 90 : 0)) % 360;
+		rotateDisplay = rotation != 0;
+		frameHeader[5] = (byte)rotation;
 
 
 		if(lcdWidth != w || lcdHeight != h)

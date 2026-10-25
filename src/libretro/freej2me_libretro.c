@@ -809,7 +809,8 @@ void retro_run(void)
 			w = (frameHeader[0]<<8) | (frameHeader[1]);
 			h = (frameHeader[2]<<8) | (frameHeader[3]);
 			r = (frameHeader[4]);
-			if(r!=0)
+			if(r==1) { r=90; } /* Compatibility with the original rotate flag. */
+			if(r==90 || r==270)
 			{
 				t = w;
 				w = h;
@@ -859,14 +860,34 @@ void retro_run(void)
 			}
 			else
 			{
-				/* copy frameBuffer to frame rotated 90 degrees anticlockwise */
-				t = 0;
-				for(j=0; j<frameWidth; j++)
+				unsigned int sourceWidth = (r==90 || r==270) ? frameHeight : frameWidth;
+				unsigned int sourceHeight = (r==90 || r==270) ? frameWidth : frameHeight;
+				unsigned int sourceX, sourceY, destX, destY;
+				for(sourceY=0; sourceY<sourceHeight; sourceY++)
 				{
-					for(i=frameHeight-1; i>=0; i--)
+					for(sourceX=0; sourceX<sourceWidth; sourceX++)
 					{
-						frame[(i*frameWidth)+j] = (frameBuffer[t]<<16) | (frameBuffer[t+1]<<8) | (frameBuffer[t+2]);
-						t+=3;
+						switch(r)
+						{
+							case 90:
+								destX = sourceY;
+								destY = sourceWidth - 1 - sourceX;
+								break;
+							case 180:
+								destX = sourceWidth - 1 - sourceX;
+								destY = sourceHeight - 1 - sourceY;
+								break;
+							case 270:
+								destX = sourceHeight - 1 - sourceY;
+								destY = sourceX;
+								break;
+							default:
+								destX = sourceX;
+								destY = sourceY;
+								break;
+						}
+						t = (sourceY * sourceWidth + sourceX) * 3;
+						frame[destY * frameWidth + destX] = (frameBuffer[t]<<16) | (frameBuffer[t+1]<<8) | (frameBuffer[t+2]);
 					}
 				}
 			}

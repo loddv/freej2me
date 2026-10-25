@@ -53,6 +53,8 @@ public class FreeJ2ME
 	private boolean useSiemensControls = false;
 	private boolean useMotorolaControls = false;
 	private boolean rotateDisplay = false;
+	private boolean invertDimesions = false;
+	private int rotation = 0;
 	private int limitFPS = 0;
 	
 	private boolean[] pressedKeys = new boolean[128];
@@ -324,31 +326,18 @@ public class FreeJ2ME
 		if(phone.equals("Siemens")) { Mobile.siemens = true; useSiemensControls = true; }
 		if(phone.equals("Motorola")) { Mobile.motorola = true; useMotorolaControls = true; }
 
-		String rotate = config.settings.get("rotate");
-		if(rotate.equals("on")) { rotateDisplay = true; }
-		if(rotate.equals("off")) { rotateDisplay = false; }
+		invertDimesions = "on".equals(config.settings.get("invertDimesions"));
+		rotation = Integer.parseInt(config.settings.get("rotation"));
+		rotateDisplay = rotation % 180 != 0;
 
-		// Create a standard size LCD if not rotated, else invert window's width and height.
-		if(!rotateDisplay) 
-		{
-			lcdWidth = w;
-			lcdHeight = h;
+		int gameWidth = invertDimesions ? h : w;
+		int gameHeight = invertDimesions ? w : h;
+		lcdWidth = rotation % 180 == 0 ? gameWidth : gameHeight;
+		lcdHeight = rotation % 180 == 0 ? gameHeight : gameWidth;
+		Mobile.getPlatform().resizeLCD(gameWidth, gameHeight);
 
-			Mobile.getPlatform().resizeLCD(w, h);
-			
-			resize();
-			main.setSize(lcdWidth*scaleFactor+xborder , lcdHeight*scaleFactor+yborder);
-		}
-		else 
-		{
-			lcdWidth = h;
-			lcdHeight = w;
-
-			Mobile.getPlatform().resizeLCD(w, h);
-
-			resize();
-			main.setSize(lcdWidth*scaleFactor+xborder , lcdHeight*scaleFactor+yborder);
-		}
+		resize();
+		main.setSize(lcdWidth*scaleFactor+xborder , lcdHeight*scaleFactor+yborder);
 	}
 
 	private int getMobileKey(int keycode)
@@ -448,16 +437,22 @@ public class FreeJ2ME
 		double vw = (main.getWidth()-xborder)*1;
 		double vh = (main.getHeight()-yborder)*1;
 
-		double nw = lcdWidth;
-		double nh = lcdHeight;
+		BufferedImage displayImage = config.isRunning ? config.getLCD() : Mobile.getPlatform().getLCD();
+		int displayRotation = config.isRunning ? 0 : rotation;
+		int imageWidth = displayImage.getWidth();
+		int imageHeight = displayImage.getHeight();
+		int displayWidth = displayRotation % 180 == 0 ? imageWidth : imageHeight;
+		int displayHeight = displayRotation % 180 == 0 ? imageHeight : imageWidth;
+		double nw = displayWidth;
+		double nh = displayHeight;
 
 		nw = vw;
-		nh = nw*((double)lcdHeight/(double)lcdWidth);
+		nh = nw*((double)displayHeight/(double)displayWidth);
 
 		if(nh>vh)
 		{
 			nh = vh;
-			nw = nh*((double)lcdWidth/(double)lcdHeight);
+			nw = nh*((double)displayWidth/(double)displayHeight);
 		}
 
 		lcd.updateScale((int)nw, (int)nh);
@@ -469,6 +464,7 @@ public class FreeJ2ME
 		public int cy=0;
 		public int cw=240;
 		public int ch=320;
+		private boolean configScaleActive;
 
 		public double scalex=1;
 		public double scaley=1;
@@ -487,38 +483,40 @@ public class FreeJ2ME
 		{
 			try
 			{
-				Graphics2D cgc = (Graphics2D)this.getGraphics();
+				Graphics2D cgc = (Graphics2D)g.create();
+				BufferedImage image;
 				if (config.isRunning)
 				{
-					if(!rotateDisplay)
-					{
-						g.drawImage(config.getLCD(), cx, cy, cw, ch, null);
-					}
-					else
-					{
-						// If rotated, simply redraw the config menu with different width and height
-						g.drawImage(config.getLCD(), cy, cx, cw, ch, null);
-					}
+					image = config.getLCD();
 				}
 				else
 				{
-					if(!rotateDisplay)
-					{
-						g.drawImage(Mobile.getPlatform().getLCD(), cx, cy, cw, ch, null);
-					}
-					else
-					{
-						// Rotate the FB 90 degrees counterclockwise with an adjusted pivot
-						cgc.rotate(Math.toRadians(-90), ch/2, ch/2);
-						// Draw the rotated FB with adjusted cy and cx values
-						cgc.drawImage(Mobile.getPlatform().getLCD(), 0, cx, ch, cw, null);
-					}
-
+					image = Mobile.getPlatform().getLCD();
 					if(limitFPS>0)
 					{
 						Thread.sleep(limitFPS);
 					}
 				}
+				if(configScaleActive != config.isRunning)
+				{
+					configScaleActive = config.isRunning;
+					FreeJ2ME.this.resize();
+				}
+				int displayRotation = config.isRunning ? 0 : rotation;
+				int imageWidth = image.getWidth();
+				int imageHeight = image.getHeight();
+				cgc.translate(cx + cw / 2.0, cy + ch / 2.0);
+				cgc.rotate(-Math.toRadians(displayRotation));
+				if(displayRotation % 180 == 0)
+				{
+					cgc.scale((double)cw / imageWidth, (double)ch / imageHeight);
+				}
+				else
+				{
+					cgc.scale((double)ch / imageWidth, (double)cw / imageHeight);
+				}
+				cgc.drawImage(image, -imageWidth / 2, -imageHeight / 2, null);
+				cgc.dispose();
 			}
 			catch (Exception e)
 			{
