@@ -18,24 +18,25 @@ package com.mascotcapsule.micro3d.v3;
 
 public class AffineTrans
 {
-	public int m00;
-	public int m01;
-	public int m02;
-	public int m03;
-	public int m10;
-	public int m11;
+	public int m00; // m{row}{col}
+	public int m01; 
+	public int m02; // m00  m01  m02  m03
+	public int m03; // m10  m11  m12  m13
+	public int m10; // m20  m21  m22  m23
+	public int m11;	// m30  m31  m32  m33
 	public int m12;
-	public int m13;
-	public int m20;
-	public int m21;
-	public int m22;
-	public int m23;
+	public int m13; // eqv. to the common array[16]:
+	public int m20; //  0   1   2   3
+	public int m21; //  4   5   6   7
+	public int m22; //  8   9  10  11
+	public int m23; // 12  13  14  15  <- Really, it's only 3x4
 
-	private int rotx;
-	private int roty;
-	private int rotz;
-
-	public AffineTrans() {  }
+	public AffineTrans()
+	{
+		m00 = m01 = m02 = m03 = 0; 
+		m10 = m11 = m12 = m13 = 0; 
+		m20 = m21 = m22 = m23 = 0; 
+	}
 
 	public AffineTrans(int m00, int m01, int m02, int m03, int m10, int m11, int m12, int m13, int m20, int m21, int m22, int m23)
 	{
@@ -115,7 +116,6 @@ public class AffineTrans
 		m21 = a[offset+9];
 		m22 = a[offset+10];
 		m23 = a[offset+11];
-
 	}
 
 	public final void get(int[] a)
@@ -198,7 +198,7 @@ public class AffineTrans
 		m23 = a.m23;
 	}
 
-	public final void set(int[][] a)
+	public final void set(int[][] a) // int[row][col] -- must be at least int[3][4]
 	{
 		m00 = a[0][0];
 		m01 = a[0][1];
@@ -232,47 +232,182 @@ public class AffineTrans
 
 	public final Vector3D transPoint(Vector3D v)
 	{
-		return v; // ?
+		return transform(v);
 	}
 
 	public final Vector3D transform(Vector3D v)
 	{
-		return v; // ?
+		double x = v.x/4096D;
+		double y = v.y/4096D;
+		double z = v.z/4096D;
+
+		int X = (int)( x*m00 + y*m10 + z*m20 );
+		int Y = (int)( x*m01 + y*m11 + z*m21 );
+		int Z = (int)( x*m02 + y*m12 + z*m22 ); 
+		
+		return new Vector3D(X,Y,Z);
 	}
 
-	public final void multiply(AffineTrans a)
-	{
-		mul(a);
-	}
+	public final void multiply(AffineTrans a) { mul(this, a); }
 
-	public final void mul(AffineTrans a)
-	{
-		// big multiply function goes here
-	}
+	public final void mul(AffineTrans a) { mul(this, a); }
 
 	public final void multiply(AffineTrans a1, AffineTrans a2) { mul(a1, a2); }
 
-	public final void mul(AffineTrans a1, AffineTrans a2) {  }
+	public final void mul(AffineTrans a1, AffineTrans a2)
+	{
+		double b00 = a2.m00/4096D; // Fixed point arithmetic where 1.0 = 4096
+		double b01 = a2.m00/4096D; // The multiplier/divisor must not be
+		double b02 = a2.m00/4096D; // adjusted.  e.g. a * b will give the
+		double b03 = a2.m00/4096D; // wrong result and should be a * (b/4096)
+		double b10 = a2.m00/4096D;
+		double b11 = a2.m00/4096D;
+		double b12 = a2.m00/4096D;
+		double b13 = a2.m00/4096D;
+		double b20 = a2.m00/4096D;
+		double b21 = a2.m00/4096D;
+		double b22 = a2.m00/4096D;
+		double b23 = a2.m00/4096D;
 
-	public final void setRotationX(int x) { rotx = x; }
+		int t00  = (int)(a1.m00*a2.m00  + a1.m01*a2.m10  + a1.m02*a2.m20);
+		int t01  = (int)(a1.m00*a2.m01  + a1.m01*a2.m11  + a1.m02*a2.m21);
+		int t02  = (int)(a1.m00*a2.m02  + a1.m01*a2.m12  + a1.m02*a2.m22);
+		int t03  = (int)(a1.m00*a2.m03  + a1.m01*a2.m13  + a1.m02*a2.m23);
 
-	public final void setRotationY(int y) { roty = y; }
+		int t10  = (int)(a1.m10*a2.m00  + a1.m11*a2.m10  + a1.m12*a2.m20);
+		int t11  = (int)(a1.m10*a2.m01  + a1.m11*a2.m11  + a1.m12*a2.m21);
+		int t12  = (int)(a1.m10*a2.m02  + a1.m11*a2.m12  + a1.m12*a2.m22);
+		int t13  = (int)(a1.m10*a2.m03  + a1.m11*a2.m13  + a1.m12*a2.m23);
 
-	public final void setRotationZ(int z) { rotz = z; }
+		int t20  = (int)(a1.m20*a2.m00  + a1.m21*a2.m10  + a1.m22*a2.m20);
+		int t21  = (int)(a1.m20*a2.m01  + a1.m21*a2.m11  + a1.m22*a2.m21);
+		int t22  = (int)(a1.m20*a2.m02  + a1.m21*a2.m12  + a1.m22*a2.m22);
+		int t23  = (int)(a1.m20*a2.m03  + a1.m21*a2.m13  + a1.m22*a2.m23);
+		
+		m00 = t00;  m01 = t01;  m02 = t02;  m03 = t03;
+		m10 = t10;  m11 = t11;  m12 = t12;  m13 = t13;
+		m20 = t20;  m21 = t21;  m22 = t22;  m23 = t23;
+	}
 
-	public final void setIdentity() {  }
+	public final void setIdentity()
+	{
+		m00 = 4096;  m01 = 0;     m02 = 0;     m03 = 0; 
+		m10 = 0;     m11 = 4096;  m12 = 0;     m13 = 0; 
+		m20 = 0;     m21 = 0;     m22 = 4096;  m23 = 0; 
+	}
+	
+	public final void setRotationX(int x) { rotationX(x); }
+	
+	public final void setRotationY(int y) { rotationY(y); }
+	
+	public final void setRotationZ(int z) { rotationZ(z); }
 
-	public final void rotationX(int x) { rotx = x; }
+	public final void rotationV(Vector3D v, int r) { setRotation(v, r);  }
 
-	public final void rotationY(int y) { roty = y; }
+	public final void rotationX(int x)
+	{
+		m00 =  1; m01 =  0;              m02 =  0;             m03 =  0;
+		m10 =  0; m11 =  Util3D.cos(x);  m12 =  Util3D.sin(x); m13 =  0;
+		m20 =  0; m21 = -Util3D.sin(x);  m22 =  Util3D.cos(x); m23 =  0;
+	}
 
-	public final void rotationZ(int z) { rotz = z; }
+	public final void rotationY(int y)
+	{
+		m00 =  Util3D.cos(y); m01 =  0; m02 = -Util3D.sin(y); m03 =  0;
+		m10 =  0;             m11 =  1; m12 =  0;             m13 =  0;
+		m20 =  Util3D.sin(y); m21 =  0; m22 =  Util3D.cos(y); m23 =  0;
+	}
 
-	public final void rotationV(Vector3D vector3d, int i) {  }
+	public final void rotationZ(int z)
+	{
+		m00 =  Util3D.cos(z); m01 =  Util3D.sin(z); m02 =  0; m03 =  0;
+		m10 = -Util3D.sin(z); m11 =  Util3D.cos(z); m12 =  0; m13 =  0;
+		m20 =  0;             m21 =  0;             m22 =  1; m23 =  0;
+	}
 
-	public final void setRotation(Vector3D vector3d, int i) {  }
+	public final void setRotation(Vector3D v, int r)
+	{
+		// I'm guessing this is like the other setRotation methods but around an arbitrary axis.
+		// A rotation matrix from axis and angle -- this is ugly
+		double Ux = v.x/4096D;
+		double Uy = v.y/4096D;
+		double Uz = v.z/4096D;
+		double theta = (r/4096D) * Math.PI*2;
+		double cost = Math.cos(theta);
+		double sint = Math.sin(theta);
 
-	public final void setViewTrans(Vector3D vector3d, Vector3D vector3d1, Vector3D vector3d2) {  }
+		// v must be a unit vector - normalize
+		double vLen = Math.sqrt( (Ux*Ux) + (Uy*Uy) + (Uz*Uz) );
+		if(vLen!=0)
+		{
+			Ux = Ux / vLen;
+			Uy = Uy / vLen;
+			Uz = Uz / vLen;
+		} else { Ux = Uy = Uz = 0; }
+		
+		m00 = (int)(( cost + Ux*Ux*(1-cost)    )*4096);
+		m01 = (int)(( Ux*Uy*(1-cost) - Uz*sint )*4096);
+		m02 = (int)(( Ux*Uz*(1-cost) + Uy*sint )*4096);
+		m03 = 0;
 
-	public final void lookAt(Vector3D vector3d, Vector3D vector3d1, Vector3D vector3d2) {  }
+		m10 = (int)(( Uy*Ux*(1-cost) + Uz*sint )*4096);
+		m11 = (int)(( cost + Uy*Uy*(1-cost)    )*4096);
+		m12 = (int)(( Uy*Uz*(1-cost) - Ux*sint )*4096);
+		m13 = 0;
+
+		m20 = (int)(( Uz*Ux*(1-cost) - Uy*sint )*4096);
+		m21 = (int)(( Uz*Uy*(1-cost) + Ux*sint )*4096);
+		m22 = (int)(( cost + Uz*Uz*(1-cost)    )*4096);
+		m23 = 0;
+	}
+
+	public final void setViewTrans(Vector3D pos, Vector3D look, Vector3D up) { lookAt(pos, look, up); }
+
+	public final void lookAt(Vector3D pos, Vector3D look, Vector3D up)
+	{
+		double Ux = up.x/4096D;
+		double Uy = up.y/4096D;
+		double Uz = up.z/4096D;
+
+		// z-axis 
+		//	- Find difference in position 
+		//    between camera and thing we want to look at
+		double Zx = (pos.x - look.x)/4096D;
+		double Zy = (pos.y - look.y)/4096D;
+		double Zz = (pos.z - look.z)/4096D;
+		//	- Normalize
+		double vLen = Math.sqrt( (Zx*Zx) + (Zy*Zy) + (Zz*Zz) );
+		if(vLen!=0)
+		{
+			Zx = Zx / vLen;
+			Zy = Zy / vLen;
+			Zz = Zz / vLen;
+		} else { Zx = Zy = Zz = 0; }
+
+		// x-axis
+		// - Find cross product of z-axis and up vector
+		double Xx = Zy * Uz - Zz * Uy;  // C.x = A.y * B.z - A.z * B.y
+		double Xy = Zz * Ux - Zx * Uz;  // C.y = A.z * B.x - A.x * B.z
+		double Xz = Zx * Uy - Zy * Ux;  // C.z = A.x * B.y - A.y * B.x
+		//	- Normalize
+		vLen = Math.sqrt( (Xx*Xx) + (Xy*Xy) + (Xz*Xz) );
+		if(vLen!=0)
+		{
+			Xx = Xx / vLen;
+			Xy = Xy / vLen;
+			Xz = Xz / vLen;
+		} else { Xx = Xy = Xz = 0; }
+
+		// y-axis
+		// - Find cross product of z-axis and x-axis
+		double Yx = Zy * Xz - Zz * Xy;  // C.x = A.y * B.z - A.z * B.y
+		double Yy = Zz * Xx - Zx * Xz;  // C.y = A.z * B.x - A.x * B.z
+		double Yz = Zx * Xy - Zy * Xx;  // C.z = A.x * B.y - A.y * B.x
+		//	No need to normalize
+
+		// Create Matrix
+		m00 = (int)(Xx*4096); m01 = (int)(Xy*4096); m02 = (int)(Xz*4096); m03 = 0;
+		m10 = (int)(Yx*4096); m11 = (int)(Yy*4096); m12 = (int)(Yz*4096); m13 = 0;
+		m20 = (int)(Zx*4096); m21 = (int)(Zy*4096); m22 = (int)(Zz*4096); m23 = 0;
+	}
 }

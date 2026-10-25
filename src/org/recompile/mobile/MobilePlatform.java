@@ -50,8 +50,6 @@ public class MobilePlatform
 
 	public String dataPath = "";
 
-	public boolean sound = true;
-
 	public int keyState = 0;
 
 	public MobilePlatform(int width, int height)
@@ -102,6 +100,11 @@ public class MobilePlatform
 	{
 		updateKeyState(keycode, 0);
 		Mobile.getDisplay().getCurrent().keyReleased(keycode);
+	}
+
+	public void keyRepeated(int keycode)
+	{
+		Mobile.getDisplay().getCurrent().keyRepeated(keycode);
 	}
 
 	public void pointerDragged(int x, int y)

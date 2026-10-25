@@ -18,7 +18,8 @@ package com.mascotcapsule.micro3d.v3;
 
 public class Vector3D
 {
-	public int x;
+	// componets are fixed-point numbers in which 1.0 is equivalent to 4096 
+	public int x; 
 	public int y;
 	public int z;
 
@@ -45,17 +46,23 @@ public class Vector3D
 
 	public final void set(int X, int Y, int Z) { x=X; y=Y; z=Z; }
 
-	public final void unit()
+	public final void unit() // unit vector will have a length of 4096 
 	{
-		double len = Math.sqrt(x*x + y*y + z*z);
-		x = (int)(x/len);
-		y = (int)(y/len);
-		z = (int)(z/len);
+		double X = x/4096D;
+		double Y = y/4096D;
+		double Z = z/4096D;
+		double len = Math.sqrt(X*X + Y*Y + Z*Z);
+		x = (int)((X/len)*4096);
+		y = (int)((Y/len)*4096);
+		z = (int)((Z/len)*4096);
 	}
 
 	public final int innerProduct(Vector3D v)
 	{
-		return (x*v.x)+(y*v.y)+(z*v.z);
+		double X = x/4096D;
+		double Y = y/4096D;
+		double Z = z/4096D;
+		return (int)((X*v.x)+(Y*v.y)+(Z*v.z))*4096;
 	}
 
 	public final void outerProduct(Vector3D v)
@@ -64,18 +71,22 @@ public class Vector3D
 		// Lets find the cross-product instead
 		// as the exterior product is a generalization
 		// of the cross product
-		int t1 = (y*v.z) - (z*v.y);
-		int t2 = (z*v.x) - (x*v.z);
-		int t3 = (x*v.y) - (y*v.x);
-		x = t1;
-		y = t2;
-		z = t3;
+		double X = x/4096D;
+		double Y = y/4096D;
+		double Z = z/4096D;
+		x = (int)( Y*v.z - Z*v.y )*4096;
+		y = (int)( Z*v.x - X*v.z )*4096;
+		z = (int)( X*v.y - Y*v.x )*4096;
+		//unit();
 	}
 
 	public static final int innerProduct(Vector3D a, Vector3D b)
 	{
 		// Dot product
-		return (a.x*b.x)+(a.y*b.y)+(a.z*b.z);
+		double aX = a.x/4096D;
+		double aY = a.y/4096D;
+		double aZ = a.z/4096D;
+		return (int)((aX*b.x)+(aY*b.y)+(aZ*b.z))*4096;
 	}
 
 	public static final Vector3D outerProduct(Vector3D a, Vector3D b)

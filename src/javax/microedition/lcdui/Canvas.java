@@ -18,6 +18,7 @@ package javax.microedition.lcdui;
 
 import org.recompile.mobile.Mobile;
 import org.recompile.mobile.PlatformImage;
+import org.recompile.mobile.PlatformGraphics;
 
 public abstract class Canvas extends Displayable
 {
@@ -73,6 +74,7 @@ public abstract class Canvas extends Displayable
 			case Mobile.NOKIA_DOWN: return DOWN;
 			case Mobile.NOKIA_LEFT: return LEFT;
 			case Mobile.NOKIA_RIGHT: return RIGHT;
+			case Mobile.NOKIA_SOFT3: return FIRE;
 		}
 		return 0;
 	}
@@ -85,17 +87,18 @@ public abstract class Canvas extends Displayable
 			//case Mobile.GAME_DOWN: return Mobile.KEY_NUM8;
 			//case Mobile.GAME_LEFT: return Mobile.KEY_NUM4;
 			//case Mobile.GAME_RIGHT: return Mobile.KEY_NUM6;
+			//case Mobile.GAME_FIRE: return Mobile.KEY_NUM5;
 			case Mobile.GAME_UP: return Mobile.NOKIA_UP;
 			case Mobile.GAME_DOWN: return Mobile.NOKIA_DOWN;
 			case Mobile.GAME_LEFT: return Mobile.NOKIA_LEFT;
 			case Mobile.GAME_RIGHT: return Mobile.NOKIA_RIGHT;
-			case Mobile.GAME_FIRE: return Mobile.KEY_NUM5;
+			case Mobile.GAME_FIRE: return Mobile.NOKIA_SOFT3;
 			case Mobile.GAME_A: return Mobile.KEY_NUM1;
 			case Mobile.GAME_B: return Mobile.KEY_NUM3;
 			case Mobile.GAME_C: return Mobile.KEY_NUM7;
 			case Mobile.GAME_D: return Mobile.KEY_NUM9;
 		}
-		return Mobile.KEY_NUM5;
+		return Mobile.NOKIA_SOFT3;
 	}
 
 	public String getKeyName(int keyCode)
@@ -132,7 +135,7 @@ public abstract class Canvas extends Displayable
 
 	public boolean hasPointerMotionEvents() { return false; }
 
-	public boolean hasRepeatEvents() { return false; }
+	public boolean hasRepeatEvents() { return true; }
 
 	public void hideNotify() { }
 
@@ -154,10 +157,16 @@ public abstract class Canvas extends Displayable
 
 	public void repaint()
 	{
+		PlatformGraphics graphics;
 		try
 		{
-			paint(platformImage.getGraphics());
-			Mobile.getPlatform().repaint(platformImage, 0, 0, width, height);
+			graphics = platformImage.getGraphics();
+			graphics.reset();
+			paint(graphics);
+			if(Mobile.getDisplay().getCurrent() == this)
+			{
+				Mobile.getPlatform().repaint(platformImage, 0, 0, width, height);
+			}
 		}
 		catch (Exception e)
 		{
@@ -168,8 +177,13 @@ public abstract class Canvas extends Displayable
 
 	public void repaint(int x, int y, int width, int height)
 	{
-		paint(platformImage.getGraphics());
-		Mobile.getPlatform().repaint(platformImage, x, y, width, height);
+		PlatformGraphics graphics = platformImage.getGraphics();
+		graphics.reset();
+		paint(graphics);
+		if(Mobile.getDisplay().getCurrent() == this)
+		{
+			Mobile.getPlatform().repaint(platformImage, x, y, width, height);
+		}
 	}
 
 	public void serviceRepaints()
@@ -179,7 +193,7 @@ public abstract class Canvas extends Displayable
 
 	public void setFullScreenMode(boolean mode)
 	{
-		System.out.print("Set Canvas Full Screen Mode ");
+		//System.out.print("Set Canvas Full Screen Mode ");
 		fullScreen = mode;
 		if(fullScreen)
 		{

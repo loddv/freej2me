@@ -16,7 +16,7 @@
 */
 package	javax.microedition.lcdui.game;
 
-import java.util.Vector;
+import java.util.ArrayList;
 
 import javax.microedition.lcdui.Graphics;
 import javax.microedition.lcdui.Image;
@@ -45,31 +45,62 @@ public class Sprite	extends	Layer
 
 	private int transform;
 
-	private Vector<Integer> sequence = new Vector<Integer>();
-
-	private int frame;
-	private int frameWidth;
-	private int frameHeight;
-	private int frameCount;
+	private ArrayList<Integer> sequence = new ArrayList<Integer>();
 
 	public Image sprite;
-	public int rowCount;
-	public int colCount;
 
-	public Sprite(Image image)
+	private int frame=0;
+	private int frameWidth;
+	private int frameHeight;
+	private int frameCount=1;
+	private int imgWidth;
+	private int imgHeight;
+
+	public int rowCount=1;
+	public int colCount=1;
+
+	public Sprite()
 	{
-		setImage(image, image.width, image.height);
+		System.out.println("Sprite A");
 	}
 
-	public Sprite(Image image, int frameW, int frameH)
+	public Sprite(Image img)
 	{
-		setImage(image, frameW, frameH);
+		//System.out.println("Sprite B"); // Found in use, Pacman Championship Edition
+		imgWidth = img.getWidth();
+		imgHeight = img.getHeight();
+		frameWidth = imgWidth; 
+		frameHeight = imgHeight;
+		colCount = 1;
+		rowCount = 1;
+		frameCount = 1;
+		setImage(img, imgWidth, imgHeight);
+	}
+
+	public Sprite(Image img, int frameW, int frameH)
+	{
+		//System.out.println("Sprite C"); // Found in use, Pacman Championship Edition
+		imgWidth = img.getWidth();
+		imgHeight = img.getHeight();
+		frameWidth = frameW;
+		frameHeight = frameH;
+		colCount = (int)(imgWidth/frameWidth);
+		rowCount = (int)(imgHeight/frameHeight);
+		frameCount = rowCount * colCount;
+		setImage(img, frameWidth, frameHeight);
 	}
 
 	public Sprite(Sprite s)
 	{
-		System.out.println("Sprite sprite");
-		sprite = s.sprite;
+		System.out.println("Sprite D");
+		imgWidth = s.sprite.getWidth();
+		imgHeight = s.sprite.getHeight();
+		frameWidth = imgWidth; 
+		frameHeight = imgHeight;
+		colCount = 1;
+		rowCount = 1;
+		frameCount = 1;
+		setImage(s.sprite, imgWidth, imgHeight);
 	}
 
 	public boolean collidesWith(Image image, int x, int y, boolean pixelLevel)
@@ -79,13 +110,13 @@ public class Sprite	extends	Layer
 
 	public boolean collidesWith(Sprite s, boolean pixelLevel)
 	{
-		int Ax = (x+refX) + hitX;
-		int Ay = (y+refY) + hitY;
+		int Ax = (x-refX) + hitX;
+		int Ay = (y-refY) + hitY;
 		int Aw = hitWidth;
 		int Ah = hitHeight;
 
-		int Bx = (s.getX()+s.getRefPixelX()) + s.getHitX();
-		int By = (s.getY()+s.getRefPixelY()) + s.getHitY();
+		int Bx = (s.getX()-s.getRefPixelX()) + s.getHitX();
+		int By = (s.getY()-s.getRefPixelY()) + s.getHitY();
 		int Bw = s.getHitWidth();
 		int Bh = s.getHitHeight();
 
@@ -143,9 +174,9 @@ public class Sprite	extends	Layer
 		try
 		{
 			int f = sequence.get(frame);
-			int r = frameHeight * (f/colCount);
-			int c = frameWidth * (f % colCount);
-			g.drawRegion(sprite, c, r, frameWidth, frameHeight, transform, x, y, 0);
+			int r = frameHeight * (int)(f / colCount);
+			int c = frameWidth * (int)(f % colCount);
+			g.drawRegion(sprite, c, r, frameWidth, frameHeight, transform, x-refX, y-refY, 0);
 		}
 		catch (Exception e)
 		{
@@ -165,7 +196,14 @@ public class Sprite	extends	Layer
 		}
 	}
 
-	public void setFrame(int sequenceIndex) { frame = sequenceIndex; }
+	public void setFrame(int sequenceIndex)
+	{
+		if(sequenceIndex<0 || sequenceIndex >= sequence.size())
+		{
+			throw new IndexOutOfBoundsException();
+		}
+		frame = sequenceIndex;
+	}
 
 	public void setFrameSequence(int[] fsequence)
 	{
@@ -176,12 +214,12 @@ public class Sprite	extends	Layer
 			sequence.clear();
 			for(int i=0; i<fsequence.length; i++)
 			{
-				sequence.add(fsequence[i]);
+				sequence.add(i, fsequence[i]);
 			}
 		}
 		catch (Exception e)
 		{
-			System.out.println("Problem with Sequence");
+			System.out.println("Problem with Sprite.setFrameSequence");
 		}
 	}
 
@@ -205,10 +243,9 @@ public class Sprite	extends	Layer
 		frameCount = colCount * rowCount;
 
 		sequence.clear();
-
 		for(int i=0; i<frameCount; i++)
 		{
-			sequence.add(i);
+			sequence.add(i, i);
 		}
 	}
 

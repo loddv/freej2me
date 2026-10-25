@@ -70,8 +70,8 @@ public class RecordStore
 
 		appname = Mobile.getPlatform().loader.suitename;
 
-		rmsPath = "rms/"+appname;
-		rmsFile = "rms/"+appname+"/"+recordStoreName;
+		rmsPath = Mobile.getPlatform().dataPath + "./rms/"+appname;
+		rmsFile = Mobile.getPlatform().dataPath + "./rms/"+appname+"/"+recordStoreName;
 
 		try
 		{
@@ -83,33 +83,30 @@ public class RecordStore
 			System.out.println(e.getMessage());
 			throw(new RecordStoreException("Problem Creating Record Store Path "+rmsPath));
 		}
-
-		try // Check Record Store File
+		file = new File(rmsFile);
+		if(!file.exists())
 		{
-			file = new File(rmsFile);
-			if(!file.exists())
+			if(!createIfNecessary)
 			{
-				if(createIfNecessary)
-				{
-					//System.out.println("> Creating New Record Store "+appname+"/"+recordStoreName);
-					file.createNewFile();
-					version = 1;
-					nextid = 1;
-					count = 0;
-					save();
-					nextid = 1;
-				}
-				else
-				{
-					throw(new RecordStoreNotFoundException("Record Store Doesn't Exist: "+rmsFile));
-				}
+				throw (new RecordStoreNotFoundException("Record Store Doesn't Exist: " + rmsFile));
 			}
-		}
-		catch (Exception e)
-		{
-			//System.out.println("> Problem Opening Record Store (createIfNecessary "+createIfNecessary+"): "+rmsFile);
-			System.out.println(e.getMessage());
-			throw(new RecordStoreException("Problem Opening Record Store (createIfNecessary "+createIfNecessary+"): "+rmsFile));
+
+			try // Check Record Store File
+			{
+				//System.out.println("> Creating New Record Store "+appname+"/"+recordStoreName);
+				file.createNewFile();
+				version = 1;
+				nextid = 1;
+				count = 0;
+				save();
+				nextid = 1;
+			}
+			catch (Exception e)
+			{
+				//System.out.println("> Problem Opening Record Store (createIfNecessary "+createIfNecessary+"): "+rmsFile);
+				System.out.println(e.getMessage());
+				throw(new RecordStoreException("Problem Opening Record Store (createIfNecessary "+createIfNecessary+"): "+rmsFile));
+			}
 		}
 
 		try // Read Records
@@ -247,7 +244,7 @@ public class RecordStore
 	{
 		try
 		{
-			File fstore = new File("rms/"+Mobile.getPlatform().loader.suitename+"/"+recordStoreName);
+			File fstore = new File(Mobile.getPlatform().dataPath + "./rms/"+Mobile.getPlatform().loader.suitename+"/"+recordStoreName);
 			fstore.delete();
 		}
 		catch (Exception e)
@@ -350,7 +347,7 @@ public class RecordStore
 		//System.out.println("List Record Stores");
 		if(rmsPath==null)
 		{
-			rmsPath = "rms/"+Mobile.getPlatform().loader.name;
+			rmsPath = Mobile.getPlatform().dataPath + "./rms/"+Mobile.getPlatform().loader.name;
 			try
 			{
 				Files.createDirectories(Paths.get(rmsPath));
@@ -444,6 +441,7 @@ public class RecordStore
 		{
 			keepupdated = keepUpdated;
 			index = 0;
+			count = 0;
 
 			this.filter = filter;
 			this.comparator = comparator;
@@ -590,6 +588,7 @@ public class RecordStore
 		{
 			build();
 			if(index >= count) { index = count-1; }
+			if(index < 0) { index = 0; }
 		}
 
 		public void reset()

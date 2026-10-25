@@ -61,6 +61,15 @@ public class PlatformGraphics extends javax.microedition.lcdui.Graphics implemen
 		gc.setFont(font.platformFont.awtFont);
 	}
 
+	public void reset() //Internal use method, resets the Graphics object to its inital values
+	{
+		translate(-1 * translateX, -1 * translateY);
+		setClip(0, 0, canvas.getWidth(), canvas.getHeight());
+		setColor(0,0,0);
+		setFont(Font.getDefaultFont());
+		setStrokeStyle(SOLID);
+	}
+
 	public Graphics2D getGraphics2D()
 	{
 		return gc;
@@ -98,7 +107,15 @@ public class PlatformGraphics extends javax.microedition.lcdui.Graphics implemen
 
 	public void drawChars(char[] data, int offset, int length, int x, int y, int anchor)
 	{
-		drawString(data.toString(), x, y, anchor);
+		char[] str = new char[length];
+		for(int i=offset; i<offset+length; i++)
+		{
+			if(i>=0 && i<data.length)
+			{
+				str[i-offset] = data[i];
+			}
+		}	
+		drawString(new String(str), x, y, anchor);
 	}
 
 	public void drawImage(Image image, int x, int y, int anchor)
@@ -123,7 +140,7 @@ public class PlatformGraphics extends javax.microedition.lcdui.Graphics implemen
 	{
 		try
 		{
-			gc.drawImage(image.platformImage.getCanvas(), x, y, null);	
+			gc.drawImage(image.platformImage.getCanvas(), x, y, null);
 		}
 		catch (Exception e)
 		{
@@ -131,12 +148,45 @@ public class PlatformGraphics extends javax.microedition.lcdui.Graphics implemen
 		}
 	}
 
-	public void drawImage(BufferedImage image, int x, int y)
+	public void drawImage2(Image image, int x, int y) // Internal use method called by PlatformImage
 	{
-		// called by Platform Image
+		gc.drawImage(image.platformImage.getCanvas(), x, y, null);
+	}
+	public void drawImage2(BufferedImage image, int x, int y) // Internal use method called by PlatformImage
+	{
+		gc.drawImage(image, x, y, null);
+	}
+
+	public void drawImage2Test(BufferedImage image, int x, int y)
+	{
+		// This Fixes some transparency issues with some images drawn 
+		// with Nokia drawImage in a few games.  
+		// There's probably a deeper underlying issue.
+		int row=0;
+		int col=0; 
+		int imgWidth = image.getWidth();
+		int imgHeight = image.getHeight();
+		int cwidth = canvas.getWidth();
+		int cheight = canvas.getHeight();
+		int width = imgWidth;
+		int height = imgHeight;
+
 		try
 		{
-			gc.drawImage(image, x, y, null);
+			int[] datargb = image.getRGB(0,0, imgWidth,imgHeight, null,0,imgWidth);
+			if(x+width>=cwidth+1) { width -= ((x+width)-cwidth); }
+			if(y+height>=cheight+1) { height-=((y+height)-cheight); }
+			for(row=0; row<height; row++)
+			{
+				for(col=0; col<width; col++)
+				{
+					int c = datargb[col+ row*imgWidth] & 0xFFFFFFFF;
+					if(c!=0xFF000000)
+					{
+						canvas.setRGB(col+x, row+y, c);
+					}
+				}
+			}
 		}
 		catch (Exception e)
 		{
@@ -151,7 +201,6 @@ public class PlatformGraphics extends javax.microedition.lcdui.Graphics implemen
 		{
 			BufferedImage sub = image.platformImage.getCanvas().getSubimage(x, y, width, height);
 			gc.drawImage(sub, x, y, null);
-			//gc.drawImage(image.platformImage.getCanvas(), 0, 0, null);
 		}
 		catch (Exception e)
 		{
@@ -198,7 +247,7 @@ public class PlatformGraphics extends javax.microedition.lcdui.Graphics implemen
 		// Copy from new image.  This avoids some problems with games that don't
 		// properly adapt to different display sizes.
 		BufferedImage temp = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
-		temp.setRGB(0, 0, width, height, rgbData, offset, scanlength);
+		temp.setRGB(0, 0, width, height, rgbData, offset, scanlength);	
 		gc.drawImage(temp, x, y, null);
 	}
 
@@ -250,6 +299,7 @@ public class PlatformGraphics extends javax.microedition.lcdui.Graphics implemen
 	public void fillRoundRect(int x, int y, int width, int height, int arcWidth, int arcHeight)
 	{
 		gc.fillRoundRect(x, y, width, height, arcWidth, arcHeight);
+		gc.fillRect(x, y, width, height);
 	}
 
 	//public int getBlueComponent() { }
@@ -305,9 +355,9 @@ public class PlatformGraphics extends javax.microedition.lcdui.Graphics implemen
 	{
 		translateX += x;
 		translateY += y;
-		gc.translate((double)x, (double)y);
-		//translateX = (int)gc.getTransform().getTranslateX();
-		//translateY = (int)gc.getTransform().getTranslateY();
+		gc.translate(x, y);
+		clipX -= x;
+		clipY -= y;
 	}
 
 	private int AnchorX(int x, int width, int anchor)
@@ -359,13 +409,13 @@ public class PlatformGraphics extends javax.microedition.lcdui.Graphics implemen
 		BufferedImage image = manipulateImage(img.platformImage.getCanvas(), manipulation);
 		x = AnchorX(x, image.getWidth(), anchor);
 		y = AnchorY(y, image.getHeight(), anchor);
-		drawImage(image, x, y);
+		drawImage2(image, x, y);
+		//drawImage2Test(image, x, y);
 	}
 
 	public void drawPixels(byte[] pixels, byte[] transparencyMask, int offset, int scanlength, int x, int y, int width, int height, int manipulation, int format)
 	{
-		//System.out.println("drawPixels A"); // Found In Use
-		
+		//System.out.println("drawPixels A "+format); // Found In Use
 		int[] Type1 = {0xFFFFFFFF, 0xFF000000, 0x00FFFFFF, 0x00000000};
 		int c = 0;
 		int[] data;
@@ -373,24 +423,27 @@ public class PlatformGraphics extends javax.microedition.lcdui.Graphics implemen
 		switch(format)
 		{
 			case -1: // TYPE_BYTE_1_GRAY_VERTICAL // used by Monkiki's Castles
-				data = new int[pixels.length*8];
-				int row = 0;
-				int col = 0;
-				for(int b = (offset/8); b<pixels.length; b++)
+				data = new int[width*height];
+				int ods = offset / scanlength;
+				int oms = offset % scanlength;
+				int b = ods % 8; //Bit offset in a byte
+				for (int yj = 0; yj < height; yj++)
 				{
-					for(int j=0; j<8; j++)
+					int ypos = yj * width;
+					int tmp = (ods + yj) / 8 * scanlength+oms;
+					for (int xj = 0; xj < width; xj++)
 					{
-						c = ((pixels[b]>>j)&1);
-						if(transparencyMask!=null) { c |= (((transparencyMask[b]>>j)&1)^1)<<1; }
-						data[((row+j)*width)+col] = Type1[c];
+						c = ((pixels[tmp + xj]>>b)&1);
+						if(transparencyMask!=null) { c |= (((transparencyMask[tmp + xj]>>b)&1)^1)<<1; }
+						data[(yj*width)+xj] = Type1[c];
 					}
-					col++;
-					if(col==width) { col=0; row+=8; }
+					b++;
+					if(b>7) b=0;
 				}
 
 				temp = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
-				temp.setRGB(0, 0, width, height, data, 0, scanlength);
-				drawImage(manipulateImage(temp, manipulation), x, y);
+				temp.setRGB(0, 0, width, height, data, 0, width);
+				gc.drawImage(manipulateImage(temp, manipulation), x, y, null);
 			break;
 
 			case 1: // TYPE_BYTE_1_GRAY // used by Monkiki's Castles
@@ -407,7 +460,7 @@ public class PlatformGraphics extends javax.microedition.lcdui.Graphics implemen
 				}
 				temp = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
 				temp.setRGB(0, 0, width, height, data, 0, scanlength);
-				drawImage(manipulateImage(temp, manipulation), x, y);
+				gc.drawImage(manipulateImage(temp, manipulation), x, y, null);
 			break;
 
 			default: System.out.println("drawPixels A : Format " + format + " Not Implemented");
@@ -416,38 +469,42 @@ public class PlatformGraphics extends javax.microedition.lcdui.Graphics implemen
 
 	public void drawPixels(int[] pixels, boolean transparency, int offset, int scanlength, int x, int y, int width, int height, int manipulation, int format)
 	{
-		//System.out.println("drawPixels B"+format); // Found In Use
+		//System.out.println("drawPixels B "+format+" "+transparency); // Found In Use
 		BufferedImage temp = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
 		temp.setRGB(0, 0, width, height, pixels, offset, scanlength);
 		BufferedImage temp2 = manipulateImage(temp, manipulation);
-		drawImage(temp2, x, y);
+		gc.drawImage(temp2, x, y, null);
 	}
 
 	public void drawPixels(short[] pixels, boolean transparency, int offset, int scanlength, int x, int y, int width, int height, int manipulation, int format)
 	{
-		//System.out.println("drawPixels C"+format); // Found In Use
+		//System.out.println("drawPixels C "+format+" "+transparency); // Found In Use
 		int[] data = new int[pixels.length];
-
 		for(int i=0; i<pixels.length; i++)
 		{
 			data[i] = pixelToColor(pixels[i], format);
+			if(!transparency) { data[i] &=0x00FFFFFF; }
 		}
 
 		BufferedImage temp = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
 		temp.setRGB(0, 0, width, height, data, offset, scanlength);
-		drawImage(manipulateImage(temp, manipulation), x, y);
+		gc.drawImage(manipulateImage(temp, manipulation), x, y, null);
 	}
 
 	public void drawPolygon(int[] xPoints, int xOffset, int[] yPoints, int yOffset, int nPoints, int argbColor)
 	{
 		int temp = color;
-		setColor(argbColor);
-		for (int i=0; i<nPoints; i++)
+		int[] x = new int[nPoints];
+		int[] y = new int[nPoints];
+
+		setAlphaRGB(argbColor);
+
+		for(int i=0; i<nPoints; i++)
 		{
-			xPoints[i] += xOffset;
-			yPoints[i] += yOffset;
+			x[i] = xPoints[xOffset+i];
+			y[i] = yPoints[yOffset+i];
 		}
-		gc.drawPolygon(xPoints, yPoints, nPoints);
+		gc.drawPolygon(x, y, nPoints);
 		setColor(temp);
 	}
 
@@ -455,7 +512,7 @@ public class PlatformGraphics extends javax.microedition.lcdui.Graphics implemen
 	{
 		//System.out.println("drawTriange");
 		int temp = color;
-		setColor(argbColor);
+		setAlphaRGB(argbColor);
 		gc.drawPolygon(new int[]{x1,x2,x3}, new int[]{y1,y2,y3}, 3);
 		setColor(temp);
 	}
@@ -463,28 +520,38 @@ public class PlatformGraphics extends javax.microedition.lcdui.Graphics implemen
 	public void fillPolygon(int[] xPoints, int xOffset, int[] yPoints, int yOffset, int nPoints, int argbColor)
 	{
 		int temp = color;
-		setColor(argbColor);
-		for (int i=0; i<nPoints; i++)
+		int[] x = new int[nPoints];
+		int[] y = new int[nPoints];
+
+		setAlphaRGB(argbColor);
+
+		for(int i=0; i<nPoints; i++)
 		{
-			xPoints[i] += xOffset;
-			yPoints[i] += yOffset;
+			x[i] = xPoints[xOffset+i];
+			y[i] = yPoints[yOffset+i];
 		}
-		gc.fillPolygon(xPoints, yPoints, nPoints);
+		gc.fillPolygon(x, y, nPoints);
 		setColor(temp);
+	}
+
+	public void fillTriangle(int x1, int y1, int x2, int y2, int x3, int y3)
+	{
+		//System.out.println("fillTriangle"); // Found In Use
+		gc.fillPolygon(new int[]{x1,x2,x3}, new int[]{y1,y2,y3}, 3);
 	}
 
 	public void fillTriangle(int x1, int y1, int x2, int y2, int x3, int y3, int argbColor)
 	{
 		//System.out.println("fillTriangle"); // Found In Use
 		int temp = color;
-		setColor(argbColor);
+		setAlphaRGB(argbColor);
 		gc.fillPolygon(new int[]{x1,x2,x3}, new int[]{y1,y2,y3}, 3);
 		setColor(temp);
 	}
 
 	public void getPixels(byte[] pixels, byte[] transparencyMask, int offset, int scanlength, int x, int y, int width, int height, int format)
 	{
-		//System.out.println("getPixels A");
+		System.out.println("getPixels A");
 	}
 
 	public void getPixels(int[] pixels, int offset, int scanlength, int x, int y, int width, int height, int format)
@@ -584,15 +651,18 @@ public class PlatformGraphics extends javax.microedition.lcdui.Graphics implemen
 			case DirectGraphics.FLIP_VERTICAL: 
 				return PlatformImage.transformImage(image, Sprite.TRANS_MIRROR_ROT180);
 			case DirectGraphics.ROTATE_90: 
-				return PlatformImage.transformImage(image, Sprite.TRANS_ROT90);
+				return PlatformImage.transformImage(image, Sprite.TRANS_ROT270);
 			case DirectGraphics.ROTATE_180:
 				return PlatformImage.transformImage(image, Sprite.TRANS_ROT180);
 			case DirectGraphics.ROTATE_270:
-				return PlatformImage.transformImage(image, Sprite.TRANS_ROT270);
-			case HV: 
+				return PlatformImage.transformImage(image, Sprite.TRANS_ROT90);
+			case HV:
 				return PlatformImage.transformImage(image, Sprite.TRANS_ROT180);
 			case H90: 
 				return PlatformImage.transformImage(PlatformImage.transformImage(image, Sprite.TRANS_MIRROR), Sprite.TRANS_ROT270);
+			case 0: /* No Manipulation */ break;
+			default:
+				System.out.println("manipulateImage "+manipulation+" not defined");
 		}
 		return image;
 	}

@@ -16,7 +16,9 @@
 */
 package org.recompile.mobile;
 
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.io.IOException;
 import java.util.Vector;
 import javax.sound.midi.MidiSystem;
 import javax.sound.midi.Sequencer;
@@ -50,23 +52,52 @@ public class PlatformPlayer implements Player
 
 		contentType = type;
 
-		if(type.equals("audio/midi") || type.equals("sp-midi") || type.equals("audio/spmidi"))
+		if(Mobile.sound == false)
 		{
-			player = new midiPlayer(stream);
+			player = new audioplayer();
 		}
 		else
 		{
-			if(type.equals("audio/x-wav"))
+			if(type.equalsIgnoreCase("audio/mid") || type.equalsIgnoreCase("audio/midi") || type.equalsIgnoreCase("sp-midi") || type.equalsIgnoreCase("audio/spmidi"))
+			{
+				player = new midiPlayer(stream);
+			}
+			else if(type.equalsIgnoreCase("audio/x-wav") || type.equalsIgnoreCase("audio/wav"))
 			{
 				player = new wavPlayer(stream);
 			}
-			else
+			else if (type.equalsIgnoreCase("")) /* If the stream doesn't have an accompanying type, try everything we can to try and load it */
+			{
+				try 
+				{
+					final byte[] tryStream = new byte[stream.available()];
+					readInputStreamData(stream, tryStream, 0, stream.available());
+
+					System.out.println("Received no explicit audio type. Trying to load as MIDI, and if it fails, WAV.");
+					/* Try loading it as a MIDI file first */
+					try { player = new midiPlayer(new ByteArrayInputStream(tryStream)); } 
+					catch (Exception e) { }
+					
+					/* If that doesn't work, try as WAV next, if it still doesn't work, we have no other players to try */
+					try { player = new wavPlayer(new ByteArrayInputStream(tryStream)); }
+					catch (Exception e)
+					{
+						System.out.println("No Player For: "+contentType);
+						player = new audioplayer();
+					}
+				}
+				catch (IOException e)
+				{
+					System.out.println("Couldn't read input stream: " + e.getMessage());
+				}
+
+			}
+			else /* TODO: Implement a player for amr and mpeg audio types */
 			{
 				System.out.println("No Player For: "+contentType);
 				player = new audioplayer();
 			}
 		}
-
 		controls[0] = new volumeControl();
 		controls[1] = new tempoControl();
 		controls[2] = new midiControl();
@@ -76,6 +107,7 @@ public class PlatformPlayer implements Player
 
 	public PlatformPlayer(String locator)
 	{
+		player = new audioplayer();
 		listeners = new Vector<PlayerListener>();
 		controls = new Control[3];
 		System.out.println("Player locator: "+locator);
@@ -106,18 +138,16 @@ public class PlatformPlayer implements Player
 	public void start()
 	{
 		//System.out.println("Play "+contentType);
-		if(Mobile.getPlatform().sound)
+		try
 		{
-			try
-			{
-				player.start();
-			}
-			catch (Exception e) {  }
+			player.start();
 		}
+		catch (Exception e) {  }
 	}
 
 	public void stop()
 	{
+		//System.out.println("Stop "+contentType);
 		try
 		{
 			player.stop();
@@ -133,6 +163,7 @@ public class PlatformPlayer implements Player
 
 	public void removePlayerListener(PlayerListener playerListener)
 	{
+		//System.out.println("Remove Player Listener");
 		listeners.remove(playerListener);
 	}
 
@@ -144,12 +175,10 @@ public class PlatformPlayer implements Player
 		}
 	}
 
-	public void deallocate() {
+	public void deallocate()
+	{
 		stop();
-		if (player instanceof midiPlayer) {
-			((midiPlayer) player).midi.close();
-		}
-		player = null;
+		player.deallocate();
 		state = Player.CLOSED;
 	}
 
@@ -185,6 +214,18 @@ public class PlatformPlayer implements Player
 		return controls;
 	}
 
+	/* Read 'n' Bytes from the InputStream. Used by IMA ADPCM decoder as well. */
+	public static void readInputStreamData(InputStream input, byte[] output, int offset, int nBytes) throws IOException 
+	{
+		int end = offset + nBytes;
+		while(offset < end) 
+		{
+			int read = input.read(output, offset, end - offset);
+			if(read < 0) throw new java.io.EOFException();
+			offset += read;
+		}
+	}
+
 	// Players //
 
 	private class audioplayer
@@ -195,6 +236,7 @@ public class PlatformPlayer implements Player
 		public long setMediaTime(long now) { return now; }
 		public long getMediaTime() { return 0; }
 		public boolean isRunning() { return false; }
+		public void deallocate() {  }
 	}
 
 	private class midiPlayer extends audioplayer
@@ -202,6 +244,8 @@ public class PlatformPlayer implements Player
 		private Sequencer midi;
 
 		private int loops = 0;
+
+		private long tick = 0L;
 
 		public midiPlayer(InputStream stream)
 		{
@@ -212,21 +256,40 @@ public class PlatformPlayer implements Player
 				midi.setSequence(stream);
 				state = Player.PREFETCHED;
 			}
-			catch (Exception e) { }
+			catch (Exception e) 
+			{ 
+				System.out.println("Couldn't load MIDI file: " + e.getMessage());
+				midi.close();
+			}
 		}
 
 		public void start()
 		{
+			if(isRunning()) { return; }
+
+			if(midi.getTickPosition() >= midi.getTickLength())
+			{
+				midi.setTickPosition(0);
+			}
+			tick = midi.getTickPosition();
 			midi.start();
 			state = Player.STARTED;
-			notifyListeners(PlayerListener.STARTED, new Long(0));
+			notifyListeners(PlayerListener.STARTED, tick);
 		}
 
 		public void stop()
 		{
+			if(!isRunning()) { return; }
 			midi.stop();
-			state = Player.REALIZED;
+			state = Player.PREFETCHED;
+			tick = midi.getTickPosition();
+			notifyListeners(PlayerListener.STOPPED, tick);
 		}
+		public void deallocate()
+		{
+			midi.close();
+		}
+
 		public void setLoopCount(int count)
 		{
 			loops = count;
@@ -243,7 +306,7 @@ public class PlatformPlayer implements Player
 		}
 		public long getMediaTime()
 		{
-			return 0;
+			return midi.getTickPosition();
 		}
 		public boolean isRunning()
 		{
@@ -253,29 +316,65 @@ public class PlatformPlayer implements Player
 
 	private class wavPlayer extends audioplayer
 	{
-
+		/* PCM WAV variables */
 		private AudioInputStream wavStream;
 		private Clip wavClip;
-
+		/* IMA ADPCM WAV variables */
+		private WavImaAdpcmDecoder adpcmDec = new WavImaAdpcmDecoder();
+		InputStream decodedStream;
+		private int[] wavHeaderData = new int[4];
+		
+		/* Player control variables */
 		private int loops = 0;
-        @Deprecated
-		private Long time = new Long(0);
+
+		private long time = 0L;
 
 		public wavPlayer(InputStream stream)
 		{
 			try
 			{
-				wavStream = AudioSystem.getAudioInputStream(stream);
-		        wavClip = AudioSystem.getClip();
-				wavClip.open(wavStream);
-				state = Player.PREFETCHED;
+				/*
+				 * A wav header is generally 44-bytes long, and it is what we need to read in order to get
+				 * the stream's format, frame size, bit rate, number of channels, etc. which gives us information
+				 * on the kind of codec needed to play or decode the incoming stream. The stream needs to be reset
+				 * or else PCM files will be loaded without a header and it might cause issues with playback.
+				 */
+				stream.mark(48);
+				wavHeaderData = adpcmDec.readHeader(stream);
+				stream.reset();
+
+				/* We only check for IMA ADPCM at the moment. */
+				if(wavHeaderData[0] != 17) /* If it's not IMA ADPCM we don't need to do anything to the stream. */
+				{
+					wavStream = AudioSystem.getAudioInputStream(stream);
+					wavClip = AudioSystem.getClip();
+					wavClip.open(wavStream);
+					state = Player.PREFETCHED;
+				}
+				else /* But if it is IMA ADPCM, we have to decode it manually. */
+				{
+					decodedStream = adpcmDec.decodeImaAdpcm(stream, wavHeaderData);
+					wavStream = AudioSystem.getAudioInputStream(decodedStream);
+					wavClip = AudioSystem.getClip();
+					wavClip.open(wavStream);
+					state = Player.PREFETCHED;
+				}
 			}
-			catch (Exception e) { }
+			catch (Exception e) 
+			{ 
+				System.out.println("Couldn't load wav file: " + e.getMessage());
+				wavClip.close();
+			}
 		}
 
 		public void start()
 		{
-			if(isRunning()) { wavClip.setFramePosition(0); }
+			if(isRunning()) { return; }
+			
+			if(wavClip.getFramePosition() >= wavClip.getFrameLength())
+			{
+				wavClip.setFramePosition(0);
+			}
 			time = wavClip.getMicrosecondPosition();
 			wavClip.start();
 			state = Player.STARTED;
@@ -284,6 +383,7 @@ public class PlatformPlayer implements Player
 
 		public void stop()
 		{
+			if(!isRunning()) { return; }
 			wavClip.stop();
 			time = wavClip.getMicrosecondPosition();
 			state = Player.PREFETCHED;

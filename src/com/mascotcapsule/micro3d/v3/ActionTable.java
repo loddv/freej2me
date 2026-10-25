@@ -18,22 +18,47 @@ package com.mascotcapsule.micro3d.v3;
 
 import java.io.IOException;
 
+import org.recompile.mobile.Mobile;
+
 public class ActionTable
 {
 
-	public ActionTable(byte[] b) {  }
+	protected int numFrames;
+	protected int numActions;
+	private byte[] rawdata;
 
-	public ActionTable(String name) throws IOException {  }
+	public ActionTable(byte[] b) 
+	{
+		/*
+		System.out.println("Action Table");
+		for(int i=0; i<b.length; i++)
+		{
+			System.out.printf("%02X ", b[i]);
+		}
+		*/
+		rawdata = b;
+		numFrames = 1;
+		numActions = 1;
+	}
+
+	public ActionTable(String name) throws IOException
+	{
+		System.out.println("Action Table "+name);
+		rawdata = Mobile.getPlatform().loader.getMIDletResourceAsByteArray(name);
+
+		numFrames = 1;
+		numActions = 1;
+	}
 
 
 	public final void dispose() {  }
 
-	public final int getNumAction() { return 0; }
+	public final int getNumAction() { return getNumActions(); }
 
-	public final int getNumActions() { return 0; }
+	public final int getNumActions() { return numActions; }
 
-	public final int getNumFrame(int idx) { return 0; }
+	public final int getNumFrame(int idx) { return getNumFrames(idx); }
 
-	public final int getNumFrames(int idx) { return 0; }
+	public final int getNumFrames(int idx) { return numFrames; }
 
 }

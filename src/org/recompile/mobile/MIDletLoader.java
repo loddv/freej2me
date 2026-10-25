@@ -35,6 +35,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 
 import java.util.HashMap;
+import java.util.ArrayList;
 
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
@@ -62,6 +63,7 @@ public class MIDletLoader extends URLClassLoader
 
 	private HashMap<String, String> properties = new HashMap<String, String>(32);
 
+
 	public MIDletLoader(URL urls[])
 	{
 		super(urls);
@@ -71,8 +73,7 @@ public class MIDletLoader extends URLClassLoader
 			System.setProperty("microedition.platform", "j2me");
 			System.setProperty("microedition.profiles", "MIDP-2.0");
 			System.setProperty("microedition.configuration", "CLDC-1.0");
-			// System.setProperty("microedition.locale", "en-US");
-			System.setProperty("microedition.locale", "pt-BR");
+			System.setProperty("microedition.locale", "en-US");
 			System.setProperty("microedition.encoding", "file.encoding");
 		}
 		catch (Exception e)
@@ -87,11 +88,12 @@ public class MIDletLoader extends URLClassLoader
 			properties.put("microedition.platform", "j2me");
 			properties.put("microedition.profiles", "MIDP-2.0");
 			properties.put("microedition.configuration", "CLDC-1.0");
-			// properties.put("microedition.locale", "en-US");
-			properties.put("microedition.locale", "pt-BR");
+			properties.put("microedition.locale", "en-US");
 			properties.put("microedition.encoding", "file.encoding");
 		}
-		catch (Exception e) {
+		catch (Exception e)
+		{
+			System.out.println("Can't Read Manifest!");
 			return;
 		}
 
@@ -99,7 +101,7 @@ public class MIDletLoader extends URLClassLoader
 
 	public void start() throws MIDletStateChangeException
 	{
-		Method start;
+		Method start = null;
 
 		try
 		{
@@ -123,24 +125,31 @@ public class MIDletLoader extends URLClassLoader
 
 		try
 		{
-			start = mainClass.getDeclaredMethod("startApp");
-			start.setAccessible(true);
+			while (start == null)
+			{
+				try
+				{
+					start = mainClass.getDeclaredMethod("startApp");
+					start.setAccessible(true);
+				}
+				catch (NoSuchMethodException e)
+				{
+					mainClass = mainClass.getSuperclass();
+					if (mainClass == null || mainClass == MIDlet.class)
+					{
+						throw e;
+					}
+
+					mainClass = loadClass(mainClass.getName(), true);
+				}
+			}
 		}
 		catch (Exception e)
 		{
-			try
-			{
-				mainClass = loadClass(mainClass.getSuperclass().getName(), true);
-				start = mainClass.getDeclaredMethod("startApp");
-				start.setAccessible(true);
-			}
-			catch (Exception f)
-			{
-				System.out.println("Can't Find startApp Method");
-				f.printStackTrace();
-				System.exit(0);
-				return;
-			}
+			System.out.println("Can't Find startApp Method");
+			e.printStackTrace();
+			System.exit(0);
+			return;
 		}
 
 		try
@@ -157,10 +166,26 @@ public class MIDletLoader extends URLClassLoader
 	private void loadManifest()
 	{
 		String resource = "META-INF/MANIFEST.MF";
-
 		URL url = findResource(resource);
-
-		if(url==null) { return; }
+		if(url==null)
+		{
+			resource = "meta-inf/MANIFEST.MF";
+			url = findResource(resource);
+			if(url==null)
+			{
+				resource = "META-INF/manifest.fm";
+				url = findResource(resource);
+				if(url==null)
+				{
+					resource = "meta-inf/manifest.fm";
+					url = findResource(resource);
+					if(url==null)
+					{
+						return;
+					}	
+				}	
+			}
+		}
 
 		String line;
 		String[] parts;
@@ -171,8 +196,21 @@ public class MIDletLoader extends URLClassLoader
 		{
 			InputStream is = url.openStream();
 			BufferedReader br = new BufferedReader(new InputStreamReader(is));
-			while ((line = br.readLine()) != null)
+			
+			ArrayList<String> lines = new ArrayList<String>();
+			while ((line = br.readLine()) != null) 
 			{
+				if(line.startsWith(" "))
+				{
+					line = lines.get(lines.size()-1) + line.trim();
+					lines.remove(lines.size()-1);
+				}
+				lines.add(line);
+			}
+
+			for (int i=0; i<lines.size(); i++)
+			{
+				line = lines.get(i);
 				if(line.startsWith("MIDlet-1:"))
 				{
 					System.out.println(line);
@@ -195,7 +233,6 @@ public class MIDletLoader extends URLClassLoader
 					value = line.substring(split+1).trim();
 					properties.put(key, value);
 				}
-
 			}
 			// for RecordStore, remove illegal chars from name
 			suitename = suitename.replace(":","");
@@ -205,7 +242,6 @@ public class MIDletLoader extends URLClassLoader
 			System.out.println("Can't Read Jar Manifest!");
 			e.printStackTrace();
 		}
-
 	}
 
 
@@ -222,7 +258,18 @@ public class MIDletLoader extends URLClassLoader
 		try
 		{
 			url = findResource(resource);
-			return url.openStream();
+			// Read all bytes, return ByteArrayInputStream //
+			InputStream stream = url.openStream();
+
+			ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+			int count=0;
+			byte[] data = new byte[4096];
+			while (count!=-1)
+			{
+				count = stream.read(data);
+				if(count!=-1) { buffer.write(data, 0, count); }
+			}
+			return new ByteArrayInputStream(buffer.toByteArray());
 		}
 		catch (Exception e)
 		{
@@ -284,6 +331,32 @@ public class MIDletLoader extends URLClassLoader
 		}
 	}
 
+	public byte[] getMIDletResourceAsByteArray(String resource)
+	{
+		URL url = getResource(resource);
+
+		try
+		{
+			InputStream stream = url.openStream();
+
+			ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+			int count=0;
+			byte[] data = new byte[4096];
+			while (count!=-1)
+			{
+				count = stream.read(data);
+				if(count!=-1) { buffer.write(data, 0, count); }
+			}
+			return buffer.toByteArray();
+		}
+		catch (Exception e)
+		{
+			System.out.println(resource + " Not Found");
+			return new byte[0];
+		}
+	}
+
+
 	public Class loadClass(String name) throws ClassNotFoundException
 	{
 		InputStream stream;
@@ -316,6 +389,63 @@ public class MIDletLoader extends URLClassLoader
 		}
 
 	}
+
+
+/* **************************************************************
+ * Special Siemens Stuff
+ * ************************************************************** */
+
+	public InputStream getMIDletResourceAsSiemensStream(String resource)
+	{
+		URL url = getResource(resource);
+
+		try
+		{
+			InputStream stream = url.openStream();
+
+			ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+			int count=0;
+			byte[] data = new byte[4096];
+			while (count!=-1)
+			{
+				count = stream.read(data);
+				if(count!=-1) { buffer.write(data, 0, count); }
+			}
+			return new SiemensInputStream(buffer.toByteArray());
+		}
+		catch (Exception e)
+		{
+			return super.getResourceAsStream(resource);
+		}
+	}
+
+	private class SiemensInputStream extends InputStream
+	{
+		private ByteArrayInputStream iostream;
+
+		public SiemensInputStream(byte[] data)
+		{
+			iostream = new ByteArrayInputStream(data);
+		}
+
+		public int read()
+		{
+			int t = iostream.read();
+			if (t == -1) { return 0; }
+			return t;
+		}
+		public int read(byte[] b, int off, int len)
+		{
+			int t = iostream.read(b, off, len);
+			if (t == -1) { return 0; }
+			return t;
+		}
+	}
+
+
+/* ************************************************************** 
+ * Instrumentation
+ * ************************************************************** */
 
 	private byte[] instrument(InputStream stream) throws Exception
 	{

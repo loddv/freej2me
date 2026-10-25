@@ -20,20 +20,23 @@ public class Util3D
 {
 	private Util3D() {  }
 
-	// why return ints?
-	// it must do something more...
-	public static final int sqrt(int t)
+	public static final int sqrt(int p)
 	{
-		return (int)Math.sqrt(t);
+		//if(p>0) { return (int)Math.sqrt(p); }
+		long n = p & 0x00000000FFFFFFFFL;
+		return (int)Math.sqrt(n);
 	}
 
-	public static final int sin(int t)
+	// angle p ranges from 0 to 4096
+	public static final int sin(int p)
 	{
-		return (int)Math.sin(t);
+		double n = (((double)p)/4096) * Math.PI*2;
+		return (int)(Math.sin(n)*4096);
 	}
 
-	public static final int cos(int t)
+	public static final int cos(int p)
 	{
-		return (int)Math.cos(t);
+		double n = (((double)p)/4096) * Math.PI*2;
+		return (int)(Math.cos(n)*4096);
 	}
 }

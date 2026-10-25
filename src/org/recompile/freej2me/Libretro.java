@@ -44,9 +44,14 @@ public class Libretro
 	private Graphics2D gc;
 
 	private Config config;
-	private boolean useNokiaControls = true;
+	private boolean useNokiaControls = false;
+	private boolean useSiemensControls = false;
+	private boolean useMotorolaControls = false;
 	private boolean rotateDisplay = false;
+	private boolean soundEnabled = true;
 	private int limitFPS = 0;
+
+	private boolean[] pressedKeys = new boolean[128];
 
 	private byte[] frameBuffer = new byte[800*800*3];
 	private byte[] frameHeader = new byte[]{(byte)0xFE, 0, 0, 0, 0, 0};
@@ -54,17 +59,46 @@ public class Libretro
 	private int mousex;
 	private int mousey;
 
+	/* 
+	 * StringBuilder used to get the updated configs from the libretro core
+	 * String[] used to tokenize each setting as its own string.
+	 */
+	private StringBuilder cfgs;
+	String[] cfgtokens;
+
 	LibretroIO lio;
 
 	public static void main(String args[])
 	{
-		Libretro app = new Libretro();
+		Libretro app = new Libretro(args);
 	}
 
-	public Libretro()
+	public Libretro(String args[])
 	{
-		lcdWidth = 240;
+		lcdWidth  = 240;
 		lcdHeight = 320;
+
+		/* 
+		 * Checks if the arguments were received from the commandline -> width, height, rotate, phonetype, fps, sound, ...
+		 * 
+		 * NOTE:
+		 * Due to differences in how linux and win32 pass their cmd arguments, we can't explictly check for a given size
+		 * on the argv array. Linux includes the "java", "-jar" and "path/to/freej2me" into the array while WIN32 doesn't.
+		 */
+		lcdWidth =  Integer.parseInt(args[0]);
+		lcdHeight = Integer.parseInt(args[1]);
+
+		if(Integer.parseInt(args[2]) == 1) { rotateDisplay = true; }
+
+		if(Integer.parseInt(args[3]) == 1)      { useNokiaControls = true;    }
+		else if(Integer.parseInt(args[3]) == 2) { useSiemensControls = true;  }
+		else if(Integer.parseInt(args[3]) == 3) { useMotorolaControls = true; }
+
+		limitFPS = Integer.parseInt(args[4]);
+
+		if(Integer.parseInt(args[5]) == 0) { soundEnabled = false; }
+
+		/* Once it finishes parsing all arguments, it's time to set up freej2me-lr */
 
 		surface = new BufferedImage(lcdWidth, lcdHeight, BufferedImage.TYPE_INT_ARGB); // libretro display
 		gc = (Graphics2D)surface.getGraphics();
@@ -89,7 +123,7 @@ public class Libretro
 				catch (Exception e) { }
 			}
 		};
-
+		
 		Mobile.getPlatform().setPainter(painter);
 
 		System.out.println("+READY");
@@ -119,6 +153,7 @@ public class Libretro
 			private int[] din = new int[5];
 			private int count = 0;
 			private int code;
+			private int mobikey;
 			private StringBuilder path;
 			private URL url;
 
@@ -139,13 +174,37 @@ public class Libretro
 							code = (din[1]<<24) | (din[2]<<16) | (din[3]<<8) | din[4];
 							switch(din[0])
 							{
-								case 0: keyUp(getMobileKey(code)); break;
+								case 0: // keyboard key up
+									mobikey = getMobileKey(code);
+									if (mobikey != 0)
+									{
+										keyUp(mobikey);
+									}
+								break;
 
-								case 1:	keyDown(getMobileKey(code)); break;
+								case 1:	// keyboard key down
+									mobikey = getMobileKey(code);
+									if (mobikey != 0)
+									{
+										keyDown(mobikey);
+									}
+								break;
 
-								case 2:	keyUp(getMobileKeyJoy(code)); break;
+								case 2:	// joypad key up
+									mobikey = getMobileKeyJoy(code);
+									if (mobikey != 0)
+									{
+										keyUp(mobikey);
+									}
+								break;
 
-								case 3: keyDown(getMobileKeyJoy(code)); break;
+								case 3: // joypad key down
+									mobikey = getMobileKeyJoy(code);
+									if (mobikey != 0)
+									{
+										keyDown(mobikey);
+									}
+								break;
 
 								case 4: // mouse up
 									mousex = (din[1]<<8) | din[2];
@@ -156,7 +215,7 @@ public class Libretro
 									}
 									else
 									{
-										Mobile.getPlatform().pointerReleased(mousey, mousex);
+										Mobile.getPlatform().pointerReleased(lcdWidth-mousey, mousex);
 									}
 								break;
 
@@ -169,7 +228,7 @@ public class Libretro
 									}
 									else
 									{
-										Mobile.getPlatform().pointerPressed(mousey, mousex);
+										Mobile.getPlatform().pointerPressed(lcdWidth-mousey, mousex);
 									}
 								break;
 
@@ -182,7 +241,7 @@ public class Libretro
 									}
 									else
 									{
-										Mobile.getPlatform().pointerDragged(mousey, mousex);
+										Mobile.getPlatform().pointerDragged(lcdWidth-mousey, mousex);
 									}
 								break;
 
@@ -198,6 +257,25 @@ public class Libretro
 									{
 										// Check config
 										config.init();
+
+										/* Override configs with the ones passed through commandline */
+										config.settings.put("width",  ""+lcdWidth);
+										config.settings.put("height", ""+lcdHeight);
+
+										if(rotateDisplay)   { config.settings.put("rotate", "on");  }
+										if(!rotateDisplay)  { config.settings.put("rotate", "off"); }
+
+										if(useNokiaControls)         { config.settings.put("phone", "Nokia");    }
+										else if(useSiemensControls)  { config.settings.put("phone", "Siemens");  }
+										else if(useMotorolaControls) { config.settings.put("phone", "Motorola"); }
+										else                         { config.settings.put("phone", "Standard"); }
+
+										if(soundEnabled)   { config.settings.put("sound", "on");  }
+										if(!soundEnabled)  { config.settings.put("sound", "off"); }
+
+										config.settings.put("fps", ""+limitFPS);
+
+										config.saveConfig();
 										settingsChanged();
 
 										// Run jar
@@ -220,6 +298,42 @@ public class Libretro
 									Mobile.getPlatform().dataPath = path.toString();
 								break;
 
+								case 13:
+									/* Received updated settings from libretro core */
+									cfgs = new StringBuilder();
+									for(int i=0; i<code; i++)
+									{
+										bin = System.in.read();
+										cfgs.append((char)bin);
+									}
+									String cfgvars = cfgs.toString();
+									/* Tokens: [0]="FJ2ME_LR_OPTS:", [1]=width, [2]=height, [3]=rotate, [4]=phone, [5]=fps, ... */
+									cfgtokens = cfgvars.split("[| x]", 0);
+									/* 
+									 * cfgtokens[0] is the string used to indicate that the 
+									 * received string is a config update. Only useful for debugging, 
+									 * but better leave it in there as we might make adjustments later.
+									 */
+									config.settings.put("width",  ""+Integer.parseInt(cfgtokens[1]));
+									config.settings.put("height", ""+Integer.parseInt(cfgtokens[2]));
+
+									if(Integer.parseInt(cfgtokens[3])==1) { config.settings.put("rotate", "on");  }
+									if(Integer.parseInt(cfgtokens[3])==0) { config.settings.put("rotate", "off"); }
+
+									if(Integer.parseInt(cfgtokens[4])==0) { config.settings.put("phone", "Standard"); }
+									if(Integer.parseInt(cfgtokens[4])==1) { config.settings.put("phone", "Nokia");    }
+									if(Integer.parseInt(cfgtokens[4])==2) { config.settings.put("phone", "Siemens");  }
+									if(Integer.parseInt(cfgtokens[4])==3) { config.settings.put("phone", "Motorola"); }
+
+									config.settings.put("fps", ""+cfgtokens[5]);
+
+									if(Integer.parseInt(cfgtokens[6])==1) { config.settings.put("sound", "on");  }
+									if(Integer.parseInt(cfgtokens[6])==0) { config.settings.put("sound", "off"); }
+
+									config.saveConfig();
+									settingsChanged();
+								break;
+								
 								case 15:
 									// Send Frame Libretro //
 									try
@@ -261,7 +375,6 @@ public class Libretro
 										System.out.print("Error sending frame: "+e.getMessage());
 										System.exit(0);
 									}
-
 								break;
 							}
 							//System.out.println(" ("+code+") <- Key");
@@ -283,12 +396,19 @@ public class Libretro
 		if(limitFPS>0) { limitFPS = 1000 / limitFPS; }
 
 		String sound = config.settings.get("sound");
-		if(sound.equals("on")) { Mobile.getPlatform().sound = true; }
-		if(sound.equals("off")) { Mobile.getPlatform().sound = false; }
+		Mobile.sound = false;
+		if(sound.equals("on")) { Mobile.sound = true; }
 
-		String nokia = config.settings.get("nokia");
-		if(nokia.equals("on")) { useNokiaControls = true; }
-		if(nokia.equals("off")) { useNokiaControls = false; }
+		String phone = config.settings.get("phone");
+		useNokiaControls = false;
+		useSiemensControls = false;
+		useMotorolaControls = false;
+		Mobile.nokia = false;
+		Mobile.siemens = false;
+		Mobile.motorola = false;
+		if(phone.equals("Nokia")) { Mobile.nokia = true; useNokiaControls = true; }
+		if(phone.equals("Siemens")) { Mobile.siemens = true; useSiemensControls = true; }
+		if(phone.equals("Motorola")) { Mobile.motorola = true; useMotorolaControls = true; }
 
 		String rotate = config.settings.get("rotate");
 		if(rotate.equals("on")) { rotateDisplay = true; frameHeader[5] = (byte)1; }
@@ -307,22 +427,33 @@ public class Libretro
 
 	private void keyDown(int key)
 	{
+		int mobikeyN = (key + 64) & 0x7F; //Normalized value for indexing the pressedKeys array
 		if(config.isRunning)
 		{
 			config.keyPressed(key);
 		}
 		else
 		{
-			Mobile.getPlatform().keyPressed(key);
+			if (pressedKeys[mobikeyN] == false)
+			{
+				Mobile.getPlatform().keyPressed(key);
+			}
+			else
+			{
+				Mobile.getPlatform().keyRepeated(key);
+			}
 		}
+		pressedKeys[mobikeyN] = true;
 	}
 
 	private void keyUp(int key)
 	{
+		int mobikeyN = (key + 64) & 0x7F; //Normalized value for indexing the pressedKeys array
 		if(!config.isRunning)
 		{
 			Mobile.getPlatform().keyReleased(key);
 		}
+		pressedKeys[mobikeyN] = false;
 	}
 
 	private int getMobileKey(int keycode)
@@ -335,8 +466,40 @@ public class Libretro
 				case 274: return Mobile.NOKIA_DOWN; // Down
 				case 276: return Mobile.NOKIA_LEFT; // Left
 				case 275: return Mobile.NOKIA_RIGHT; // Right
+				case 13: return Mobile.NOKIA_SOFT3; // Middle
 			}
 		}
+		if(useSiemensControls)
+		{
+			switch(keycode)
+			{
+				case 273: return Mobile.SIEMENS_UP;
+				case 274: return Mobile.SIEMENS_DOWN;
+				case 276: return Mobile.SIEMENS_LEFT;
+				case 275: return Mobile.SIEMENS_RIGHT;
+				case 113: return Mobile.SIEMENS_SOFT1;
+				case 119: return Mobile.SIEMENS_SOFT2;
+				case 91: return Mobile.SIEMENS_SOFT1;
+				case 93: return Mobile.SIEMENS_SOFT2;
+				case 13: return Mobile.SIEMENS_FIRE;
+			}
+		}
+		if(useMotorolaControls)
+		{
+			switch(keycode)
+			{
+				case 273: return Mobile.MOTOROLA_UP;
+				case 274: return Mobile.MOTOROLA_DOWN;
+				case 276: return Mobile.MOTOROLA_LEFT;
+				case 275: return Mobile.MOTOROLA_RIGHT;
+				case 113: return Mobile.MOTOROLA_SOFT1;
+				case 119: return Mobile.MOTOROLA_SOFT2;
+				case 91: return Mobile.MOTOROLA_SOFT1;
+				case 93: return Mobile.MOTOROLA_SOFT2;
+				case 13: return Mobile.MOTOROLA_FIRE;
+			}
+		}
+
 		switch(keycode)
 		{
 			case 48: return Mobile.KEY_NUM0;
@@ -382,10 +545,10 @@ public class Libretro
 			case 93: return Mobile.NOKIA_SOFT2; // ]
 
 			// ESC - Config Menu
-			case 27: config.start();
+			//case 27: config.start(); /* This menu won't be available on the Libretro frontend */
 
 		}
-		return keycode;
+		return 0;
 	}
 
 	private int getMobileKeyJoy(int keycode)
@@ -400,6 +563,31 @@ public class Libretro
 				case 3: return Mobile.NOKIA_RIGHT; // Right
 			}
 		}
+		if(useSiemensControls)
+		{
+			switch(keycode)
+			{
+				case 0: return Mobile.SIEMENS_UP; // Up
+				case 1: return Mobile.SIEMENS_DOWN; // Down
+				case 2: return Mobile.SIEMENS_LEFT; // Left
+				case 3: return Mobile.SIEMENS_RIGHT; // Right
+				case 8: return Mobile.SIEMENS_SOFT2; // Start
+				case 9: return Mobile.SIEMENS_SOFT1; // Select
+			}
+		}
+		if(useMotorolaControls)
+		{
+			switch(keycode)
+			{
+				case 0: return Mobile.MOTOROLA_UP; // Up
+				case 1: return Mobile.MOTOROLA_DOWN; // Down
+				case 2: return Mobile.MOTOROLA_LEFT; // Left
+				case 3: return Mobile.MOTOROLA_RIGHT; // Right
+				case 8: return Mobile.MOTOROLA_SOFT2; // Start
+				case 9: return Mobile.MOTOROLA_SOFT1; // Select
+			}
+		}
+
 		switch(keycode)
 		{
 			case 0: return Mobile.KEY_NUM2; // Up
