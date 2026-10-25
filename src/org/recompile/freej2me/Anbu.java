@@ -36,10 +36,16 @@ public class Anbu
 
 	public static void main(String[] args)
 	{
-		Anbu app = new Anbu(args);
+		new Anbu(args);
+	}
+
+	static void launchSDL3(String[] args)
+	{
+		new Anbu(args, "/usr/local/bin/sdl3_interface");
 	}
 
 	private SDL sdl;
+	private final String interfaceExecutable;
 
 	private int lcdWidth;
 	private int lcdHeight;
@@ -50,6 +56,12 @@ public class Anbu
 
 	public Anbu(String args[])
 	{
+		this(args, "/usr/local/bin/sdl_interface");
+	}
+
+	private Anbu(String args[], String interfaceExecutable)
+	{
+		this.interfaceExecutable = interfaceExecutable;
 		lcdWidth = 240;
 		lcdHeight = 320;
 
@@ -97,7 +109,7 @@ public class Anbu
 
 			// Start SDL
 			sdl = new SDL();
-			sdl.start(args);
+			sdl.start(args, interfaceExecutable);
 
 			// Run jar
 			Mobile.getPlatform().runJar();
@@ -133,11 +145,11 @@ public class Anbu
 		private InputStream keys;
 		public OutputStream frame;
 
-		public void start(String args[])
+		public void start(String args[], String interfaceExecutable)
 		{
 			try
 			{
-				args[0] = "/usr/local/bin/sdl_interface";
+				args[0] = interfaceExecutable;
 				proc = new ProcessBuilder(args).start();
 
 				keys = proc.getInputStream();

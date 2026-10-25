@@ -2,7 +2,7 @@
 
 ![Java CI](https://github.com/hex007/freej2me/workflows/Java%20CI/badge.svg)
 
-A free J2ME emulator with libretro, awt and sdl2 frontends.
+A free J2ME emulator with libretro, awt, sdl2 and sdl3 frontends.
 
 Authors :
 - David Richardson [Recompile@retropie]
@@ -48,7 +48,9 @@ Development thread:
 >
 >`freej2me-sdl.jar` -> Jar executable meant to be used in conjunction with SDL2
 >
->Both the Libretro and SDL2 jar files need additional binaries to be compiled before use. Look at the additional steps below if you're going to use one of them.
+>`freej2me-sdl3.jar` -> Jar executable meant to be used in conjunction with SDL3
+>
+>The Libretro, SDL2, and SDL3 frontends need their corresponding native binaries to be compiled before use. Look at the additional steps below.
 
 **Building the SDL2 binary:**
 >
@@ -61,6 +63,18 @@ Development thread:
 > ```
 >
 > SDL2 allows FreeJ2ME to run on a Raspberry Pi.
+
+**Building the SDL3 frontend:**
+>
+>Install SDL3 (version 3.2 or newer), FreeImage, a C++ compiler, `pkg-config`, and Ant. From the repository root, run:
+> ```
+> ant
+> cd src/sdl3
+> make
+> sudo make install
+> ```
+> This installs `sdl3_interface` at `/usr/local/bin/sdl3_interface`. Launch a MIDlet with `java -jar build/freej2me-sdl3.jar 'file:///path/to/midlet.jar' [width] [height]`.
+> The SDL3 frontend is an additional Linux frontend; the SDL2 frontend remains available.
 
 **Building the Libretro core**
 
