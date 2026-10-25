@@ -26,3 +26,15 @@ jobs:
       with:
         name: freej2me-${{ steps.shortsha.outputs.value }}
         path: build/freej2me.jar
+    - uses: actions/upload-artifact@v4
+      with:
+        name: freej2me-lr-${{ steps.shortsha.outputs.value }}
+        path: build/freej2me-lr.jar
+    - uses: actions/upload-artifact@v4
+      with:
+        name: freej2me-sdl-${{ steps.shortsha.outputs.value }}
+        path: build/freej2me-sdl.jar
+    - uses: actions/upload-artifact@v4
+      with:
+        name: freej2me-sdl3-${{ steps.shortsha.outputs.value }}
+        path: build/freej2me-sdl3.jar
