@@ -334,15 +334,15 @@ public class Config
 		for(int i=start; i<(start+max) && i<t.length; i++)
 		{
 			label = t[i];
-			if(menuid==0 && i>1 && i<7)
+			if(menuid==0 && i>2 && i<8)
 			{
 				switch(i)
 				{
-					case 2: label = label+": "+settings.get("sound"); break;
-					case 3: label = label+": "+settings.get("fps"); break;
-					case 4: label = label+": "+settings.get("phone"); break;
-					case 5: label = label+": "+settings.get("invertDimesions"); break;
-					case 6: label = label+": "+settings.get("rotation"); break;
+					case 3: label = label+": "+formatValue(settings.get("sound")); break;
+					case 4: label = label+": "+settings.get("fps"); break;
+					case 5: label = label+": "+settings.get("phone"); break;
+					case 6: label = label+": "+formatValue(settings.get("invertDimesions")); break;
+					case 7: label = label+": "+settings.get("rotation"); break;
 				}
 			}
 			if(i==itemid)
@@ -358,6 +358,14 @@ public class Config
 		}
 
 		Mobile.getPlatform().painter.run();
+	}
+
+	private String formatValue(String value)
+	{
+		if(value==null) { return ""; }
+		if(value.equals("on")) { return "On"; }
+		if(value.equals("off")) { return "Off"; }
+		return value;
 	}
 
 	private void doMenuAction()
@@ -449,9 +457,7 @@ public class Config
 
 	}
 
-	private void updateSound(String value)
-	{
-		System.out.println("Config: sound "+value);
+	private void updateSound(String value) {
 		settings.put("sound", value);
 		saveConfig();
 		onChange.run();
