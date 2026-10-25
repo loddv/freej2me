@@ -53,6 +53,7 @@ public class Config
 	private String configFile = "";
 
 	public Runnable onChange;
+	public Runnable onRestart;
 
 	HashMap<String, String> settings = new HashMap<String, String>(4);
 
@@ -65,7 +66,7 @@ public class Config
 		gc = lcd.getGraphics();
 
 		menu = new ArrayList<String[]>();
-		menu.add(new String[]{"Resume Game", "Display Size", "Sound", "Limit FPS", "Phone", "Invert Dimensions", "Rotation", "Exit"}); // 0 - Main Menu
+		menu.add(new String[]{"Resume Game", "Restart", "Display Size", "Sound", "Limit FPS", "Phone", "Dimensions Inverted", "Rotation", "Exit"}); // 0 - Main Menu
 		menu.add(new String[]{"96x65","96x96","104x80","128x128","132x176","128x160","176x208","176x220", "208x208", "240x320", "320x240", "240x400", "352x416", "360x640", "640x360" ,"480x800", "800x480"}); // 1 - Size
 		menu.add(new String[]{"Quit", "Main Menu"}); // 2 - Restart Notice
 		menu.add(new String[]{"On", "Off"}); // 3 - sound
@@ -76,6 +77,14 @@ public class Config
 
 
 		onChange = new Runnable()
+		{
+			public void run()
+			{
+				// placeholder
+			}
+		};
+
+		onRestart = new Runnable()
 		{
 			public void run()
 			{
@@ -360,13 +369,14 @@ public class Config
 				switch(itemid)
 				{
 					case 0: stop(); break; // resume
-					case 1: menuid=1; itemid=0; break; // display size
-					case 2: menuid=3; itemid=0; break; // sound
-					case 3: menuid=7; itemid=0; break; // fps
-					case 4: menuid=4; itemid=0; break; // phone
-					case 5: menuid=5; itemid=0; break; // invertDimesions
-					case 6: menuid=6; itemid=0; break; // rotation
-					case 7: System.exit(0); break;
+					case 1: stop(); onRestart.run(); break; // restart
+					case 2: menuid=1; itemid=0; break; // display size
+					case 3: menuid=3; itemid=0; break; // sound
+					case 4: menuid=7; itemid=0; break; // fps
+					case 5: menuid=4; itemid=0; break; // phone
+					case 6: menuid=5; itemid=0; break; // invertDimesions
+					case 7: menuid=6; itemid=0; break; // rotation
+					case 8: System.exit(0); break;
 				}
 			break;
 

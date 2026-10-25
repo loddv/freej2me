@@ -49,6 +49,7 @@ public class FreeJ2ME
 	private PlatformImage img;
 
 	private Config config;
+	private String jarFile;
 	private boolean useNokiaControls = false;
 	private boolean useSiemensControls = false;
 	private boolean useMotorolaControls = false;
@@ -82,10 +83,10 @@ public class FreeJ2ME
 		lcdWidth = 240;
 		lcdHeight = 320;
 
-		String jarfile = "";
+		jarFile = "";
 		if(args.length>=1)
 		{
-			jarfile = args[0];
+			jarFile = args[0];
 		}
 		if(args.length>=3)
 		{
@@ -105,6 +106,7 @@ public class FreeJ2ME
 
 		config = new Config();
 		config.onChange = new Runnable() { public void run() { settingsChanged(); } };
+		config.onRestart = new Runnable() { public void run() { restartGame(); } };
 
 		Mobile.getPlatform().setPainter(new Runnable()
 		{
@@ -252,9 +254,9 @@ public class FreeJ2ME
 				}
 			});
 			t.setVisible(true);
-			jarfile = new File(t.getDirectory()+File.separator+t.getFile()).toURI().toString();
+			jarFile = new File(t.getDirectory()+File.separator+t.getFile()).toURI().toString();
 		}
-		if(Mobile.getPlatform().loadJar(jarfile))
+		if(Mobile.getPlatform().loadJar(jarFile))
 		{
 			config.init();
 
@@ -274,6 +276,19 @@ public class FreeJ2ME
 		else
 		{
 			System.out.println("Couldn't load jar...");
+		}
+	}
+
+	private void restartGame()
+	{
+		if(Mobile.getPlatform().loadJar(jarFile))
+		{
+			settingsChanged();
+			Mobile.getPlatform().runJar();
+		}
+		else
+		{
+			System.out.println("Couldn't reload jar...");
 		}
 	}
 

@@ -45,6 +45,7 @@ public class Libretro
 	private Graphics2D gc;
 
 	private Config config;
+	private String jarFile;
 	private boolean useNokiaControls = false;
 	private boolean useSiemensControls = false;
 	private boolean useMotorolaControls = false;
@@ -108,6 +109,7 @@ public class Libretro
 
 		config = new Config();
 		config.onChange = new Runnable() { public void run() { settingsChanged(); } };
+		config.onRestart = new Runnable() { public void run() { restartGame(); } };
 
 		lio = new LibretroIO();
 
@@ -238,6 +240,7 @@ public class Libretro
 									url = (new File(path.toString())).toURI().toURL();
 									if(Mobile.getPlatform().loadJar(url.toString()))
 									{
+										jarFile = url.toString();
 										// Check config
 										config.init();
 
@@ -366,6 +369,19 @@ public class Libretro
 			}
 		} // timer
 	} // LibretroIO
+
+	private void restartGame()
+	{
+		if(jarFile != null && Mobile.getPlatform().loadJar(jarFile))
+		{
+			settingsChanged();
+			Mobile.getPlatform().runJar();
+		}
+		else
+		{
+			System.out.println("Couldn't reload jar...");
+		}
+	}
 
 	private void settingsChanged()
 	{
