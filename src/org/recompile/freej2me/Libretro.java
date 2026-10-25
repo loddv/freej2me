@@ -22,6 +22,7 @@ import java.awt.Image;
 import java.awt.Canvas;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.Point;
 import java.awt.image.BufferedImage;
 
 import java.util.Arrays;
@@ -47,7 +48,6 @@ public class Libretro
 	private boolean useNokiaControls = false;
 	private boolean useSiemensControls = false;
 	private boolean useMotorolaControls = false;
-	private boolean rotateDisplay = false;
 	private int rotation = 0;
 	private boolean soundEnabled = true;
 	private int limitFPS = 0;
@@ -90,7 +90,6 @@ public class Libretro
 		lcdHeight = Integer.parseInt(args[1]);
 
 		rotation = Integer.parseInt(args[2]) == 1 ? 90 : 0;
-		rotateDisplay = rotation != 0;
 
 		if(Integer.parseInt(args[3]) == 1)      { useNokiaControls = true;    }
 		else if(Integer.parseInt(args[3]) == 2) { useSiemensControls = true;  }
@@ -211,40 +210,22 @@ public class Libretro
 								case 4: // mouse up
 									mousex = (din[1]<<8) | din[2];
 									mousey = (din[3]<<8) | din[4];
-									if(!rotateDisplay)
-									{
-										Mobile.getPlatform().pointerReleased(mousex, mousey);
-									}
-									else
-									{
-										Mobile.getPlatform().pointerReleased(lcdWidth-mousey, mousex);
-									}
+									Point releasedPoint = mapPointer(mousex, mousey);
+									Mobile.getPlatform().pointerReleased(releasedPoint.x, releasedPoint.y);
 								break;
 
 								case 5: // mouse down
 									mousex = (din[1]<<8) | din[2];
 									mousey = (din[3]<<8) | din[4];
-									if(!rotateDisplay)
-									{
-										Mobile.getPlatform().pointerPressed(mousex, mousey);
-									}
-									else
-									{
-										Mobile.getPlatform().pointerPressed(lcdWidth-mousey, mousex);
-									}
+									Point pressedPoint = mapPointer(mousex, mousey);
+									Mobile.getPlatform().pointerPressed(pressedPoint.x, pressedPoint.y);
 								break;
 
 								case 6: // mouse drag
 									mousex = (din[1]<<8) | din[2];
 									mousey = (din[3]<<8) | din[4];
-									if(!rotateDisplay)
-									{
-										Mobile.getPlatform().pointerDragged(mousex, mousey);
-									}
-									else
-									{
-										Mobile.getPlatform().pointerDragged(lcdWidth-mousey, mousex);
-									}
+									Point draggedPoint = mapPointer(mousex, mousey);
+									Mobile.getPlatform().pointerDragged(draggedPoint.x, draggedPoint.y);
 								break;
 
 								case 10: // load jar
@@ -412,7 +393,6 @@ public class Libretro
 		String invertDimesions = config.settings.get("invertDimesions");
 		int rotationSetting = Integer.parseInt(config.settings.get("rotation"));
 		rotation = (rotationSetting + ("on".equals(invertDimesions) ? 90 : 0)) % 360;
-		rotateDisplay = rotation != 0;
 		frameHeader[5] = (byte)rotation;
 
 
@@ -423,6 +403,17 @@ public class Libretro
 			Mobile.getPlatform().resizeLCD(w, h);
 			surface = new BufferedImage(lcdWidth, lcdHeight, BufferedImage.TYPE_INT_ARGB); // libretro display
 			gc = (Graphics2D)surface.getGraphics();
+		}
+	}
+
+	private Point mapPointer(int x, int y)
+	{
+		switch(rotation)
+		{
+			case 90: return new Point(lcdWidth - 1 - y, x);
+			case 180: return new Point(lcdWidth - 1 - x, lcdHeight - 1 - y);
+			case 270: return new Point(y, lcdHeight - 1 - x);
+			default: return new Point(x, y);
 		}
 	}
 

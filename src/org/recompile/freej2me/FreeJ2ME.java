@@ -52,7 +52,6 @@ public class FreeJ2ME
 	private boolean useNokiaControls = false;
 	private boolean useSiemensControls = false;
 	private boolean useMotorolaControls = false;
-	private boolean rotateDisplay = false;
 	private boolean invertDimesions = false;
 	private int rotation = 0;
 	private int limitFPS = 0;
@@ -203,31 +202,14 @@ public class FreeJ2ME
 		{
 			public void mousePressed(MouseEvent e)
 			{
-				int x = (int)((e.getX()-lcd.cx) * lcd.scalex);
-				int y = (int)((e.getY()-lcd.cy) * lcd.scaley);
-
-				// Adjust the pointer coords if the screen is rotated, same for mouseReleased
-				if(rotateDisplay)
-				{
-					x = (int)((lcd.ch-(e.getY()-lcd.cy)) * lcd.scaley);
-					y = (int)((e.getX()-lcd.cx) * lcd.scalex);
-				}
-
-				Mobile.getPlatform().pointerPressed(x, y);
+				Point point = lcd.mapPointer(e.getX(), e.getY());
+				Mobile.getPlatform().pointerPressed(point.x, point.y);
 			}
 
 			public void mouseReleased(MouseEvent e)
 			{
-				int x = (int)((e.getX()-lcd.cx) * lcd.scalex);
-				int y = (int)((e.getY()-lcd.cy) * lcd.scaley);
-
-				if(rotateDisplay)
-				{
-					x = (int)((lcd.ch-(e.getY()-lcd.cy)) * lcd.scaley);
-					y = (int)((e.getX()-lcd.cx) * lcd.scalex);
-				}
-
-				Mobile.getPlatform().pointerReleased(x, y);
+				Point point = lcd.mapPointer(e.getX(), e.getY());
+				Mobile.getPlatform().pointerReleased(point.x, point.y);
 			}
 
 			public void mouseExited(MouseEvent e) { }
@@ -240,16 +222,8 @@ public class FreeJ2ME
 		{
 			public void mouseDragged(MouseEvent e)
 			{
-				int x = (int)((e.getX()-lcd.cx) * lcd.scalex);
-				int y = (int)((e.getY()-lcd.cy) * lcd.scaley);
-
-				if(rotateDisplay)
-				{
-					x = (int)((lcd.ch-(e.getY()-lcd.cy)) * lcd.scaley);
-					y = (int)((e.getX()-lcd.cx) * lcd.scalex);
-				}
-				
-				Mobile.getPlatform().pointerDragged(x, y); 
+				Point point = lcd.mapPointer(e.getX(), e.getY());
+				Mobile.getPlatform().pointerDragged(point.x, point.y);
 			}
 		});
 
@@ -328,8 +302,6 @@ public class FreeJ2ME
 
 		invertDimesions = "on".equals(config.settings.get("invertDimesions"));
 		rotation = Integer.parseInt(config.settings.get("rotation"));
-		rotateDisplay = rotation % 180 != 0;
-
 		int gameWidth = invertDimesions ? h : w;
 		int gameHeight = invertDimesions ? w : h;
 		lcdWidth = rotation % 180 == 0 ? gameWidth : gameHeight;
@@ -475,8 +447,32 @@ public class FreeJ2ME
 			cy = (this.getHeight()-vh)/2;
 			cw = vw;
 			ch = vh;
-			scalex = (double)lcdWidth/(double)vw;
-			scaley = (double)lcdHeight/(double)vh;
+			BufferedImage image = config.isRunning ? config.getLCD() : Mobile.getPlatform().getLCD();
+			int displayRotation = config.isRunning ? 0 : rotation;
+			int imageWidth = displayRotation % 180 == 0 ? image.getWidth() : image.getHeight();
+			int imageHeight = displayRotation % 180 == 0 ? image.getHeight() : image.getWidth();
+			scalex = (double)imageWidth/(double)vw;
+			scaley = (double)imageHeight/(double)vh;
+		}
+
+		private Point mapPointer(int x, int y)
+		{
+			int displayX = (int)((x-cx) * scalex);
+			int displayY = (int)((y-cy) * scaley);
+			if(config.isRunning)
+			{
+				return new Point(displayX, displayY);
+			}
+
+			int sourceWidth = rotation % 180 == 0 ? lcdWidth : lcdHeight;
+			int sourceHeight = rotation % 180 == 0 ? lcdHeight : lcdWidth;
+			switch(rotation)
+			{
+				case 90: return new Point(sourceWidth - 1 - displayY, displayX);
+				case 180: return new Point(sourceWidth - 1 - displayX, sourceHeight - 1 - displayY);
+				case 270: return new Point(displayY, sourceHeight - 1 - displayX);
+				default: return new Point(displayX, displayY);
+			}
 		}
 
 		public void paint(Graphics g)
