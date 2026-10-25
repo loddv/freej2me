@@ -288,12 +288,12 @@ public class Config
 			case 2: title = "Restart Required"; break;
 			case 3: title = "Sound"; break;
 			case 4: title = "Phone"; break;
-			case 5: title = "Invert Dimensions"; break;
+			case 5: title = "Dimensions Inverted"; break;
 			case 6: title = "Rotation"; break;
 			case 7: title = "Limit FPS"; break;
 		}
-
-		gc.setColor(0x000080);
+        // Define a cor do background
+		gc.setColor(0x000000);
 		gc.fillRect(0,0,width,height);
 		gc.setColor(0xFFFFFF);
 		gc.drawString(title, width/2, 2, Graphics.HCENTER);
@@ -310,7 +310,7 @@ public class Config
 		if (menuid>0)
 		{
 			gc.setColor(0xFFFFFF);
-			gc.drawString("Back", 3, height-17, Graphics.LEFT);
+			gc.drawString("Back[Q]", 3, height-17, Graphics.TOP);
 		}
 
 		String[] t = menu.get(menuid);
@@ -348,7 +348,7 @@ public class Config
 			}
 			if(i==itemid)
 			{
-				gc.setColor(0xFFFF00);
+				gc.setColor(0x009FFF);
 				gc.drawString("> "+label+" <", width/2, (25+space)+(ah*(i-start)), Graphics.HCENTER);
 			}
 			else
