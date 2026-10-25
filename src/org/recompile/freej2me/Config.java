@@ -67,9 +67,9 @@ public class Config
 		menu = new ArrayList<String[]>();
 		menu.add(new String[]{"Resume Game", "Restart", "Display Size", "Sound", "Limit FPS", "Phone", "Dimensions Inverted", "Rotation", "Exit"}); // 0 - Main Menu
 		menu.add(new String[]{"96x65","96x96","104x80","128x128","132x176","128x160","176x208","176x220", "208x208", "240x320", "320x240", "240x400", "352x416", "360x640", "640x360" ,"480x800", "800x480","540x960", "960x540"}); // 1 - Size
-		menu.add(new String[]{"Quit", "Main Menu"}); // 2 - Restart Notice
+		menu.add(new String[]{"Main Menu", "Quit"}); // 2 - Restart Notice
 		menu.add(new String[]{"On", "Off"}); // 3 - sound
-		menu.add(new String[]{"Standard", "Nokia", "Siemens","Motorola"}); // 4 - Phone 
+		menu.add(new String[]{"Standard", "Nokia", "Siemens","Motorola"}); // 4 - Phone
 		menu.add(new String[]{"On", "Off"}); // 5 - invertDimesions
 		menu.add(new String[]{"0", "90", "180", "270"}); // 6 - Rotation
 		menu.add(new String[]{"Auto", "60 - Fast", "30 - Slow", "15 - Turtle"}); // 7 - FPS
@@ -398,8 +398,8 @@ public class Config
 			case 2: // Restart Required Notice
 				switch(itemid)
 				{
-					case 0: System.exit(0); break;
-					case 1: menuid=0; itemid=0;
+					case 0: menuid=0; itemid=0; break;
+					case 1: System.exit(0); break;
 				}
 			break;
 
