@@ -23,10 +23,28 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
+import java.util.Arrays;
+
 public class WavImaAdpcmDecoder
 {
 
 	/* Information about this audio format: https://wiki.multimedia.cx/index.php/IMA_ADPCM */
+
+	private static final int LEFTCHANNEL = 0;
+	private static final int RIGHTCHANNEL = 1;
+
+	/* Canonical wav header, written back in front of the decoded samples. */
+	private static final int HEADERSIZE = 44;
+
+	/* Every channel has a 4-byte preamble per block: predictor (16-bit), step index and a reserved byte. */
+	private static final int PREAMBLEBYTES = 4;
+
+	/* Microsoft's layout has each channel contributing 4 bytes (8 nibbles) before the next channel continues. */
+	private static final int GROUPBYTES = 4;
+
+	/* Limits that keep a malformed file from making the decoder run away. */
+	private static final int MAXCHUNKS = 64;
+	private static final int MAXSKIPBYTES = 8 * 1024 * 1024;
 
 	/* 
 	 * Variables to hold the previously decoded sample and step used, per channel (if needed) 
@@ -35,15 +53,13 @@ public class WavImaAdpcmDecoder
 	 * execution as much as possible since FreeJ2ME has a habit of freezing when adpcm samples 
 	 * are being decoded. So far only seems to happen in Java 8 and on my more limited devices."
 	 *     - @AShiningRay
+	 *
+	 * They are per instance (and not per class) because every player owns its own decoder and
+	 * two players can be prepared from different threads. While they were static, one decode
+	 * stepped on the other's predictor, and the result was noise instead of an error.
 	 */
-	private static final int LEFTCHANNEL = 0;
-	private static final int RIGHTCHANNEL = 1;
-
-	private static final int HEADERSIZE = 44;
-	private static final int PCMPREAMBLESIZE = 16;
-
-	private static final int[] prevSample = {0, 0};
-	private static final int[] prevStep = {0, 0};
+	private final int[] prevSample = {0, 0};
+	private final int[] prevStep = {0, 0};
 	
 	private static final int[] ima_step_index_table = 
 	{
@@ -64,140 +80,264 @@ public class WavImaAdpcmDecoder
 		15289, 16818, 18500, 20350, 22385, 24623, 27086, 29794, 32767
 	};
 
-	/* 
-	 * This method will decode IMA WAV ADPCM into linear PCM_S16LE.
-	 */
-	public static byte[] decodeADPCM(final byte[] input, int inputSize, final int numChannels, final int frameSize)
+	/* Everything the chunk walk finds out about the stream, which is what the block loop needs. */
+	private static final class RiffInfo
 	{
-		byte adpcmSample;
-		byte curChannel;
-		int inputIndex = 0, outputIndex = HEADERSIZE; /* Give some space for the header by starting from byte 44. */
-		int decodedSample;
+		private final int channels;
+		private final int sampleRate;
+		private final int blockAlign;
+		private final int dataSize;
+
+		private RiffInfo(int channels, int sampleRate, int blockAlign, int dataSize)
+		{
+			this.channels = channels;
+			this.sampleRate = sampleRate;
+			this.blockAlign = blockAlign;
+			this.dataSize = dataSize;
+		}
+	}
+
+	/*
+		The header of a WAV (RIFF) file is 44 bytes long and has the following format:
+
+		CHAR[4] "RIFF" header
+		UINT32  Size of the file (chunkSize).
+		  CHAR[4] "WAVE" format
+			CHAR[4] "fmt " header
+			UINT32  SubChunkSize (examples: 16 for plain PCM, 20 for ADPCM with cbSize )
+			  UINT16 AudioFormat (ex: 1 [PCM], 17 [IMA ADPCM] )
+			  UINT16 NumChannels
+			  UINT32 SampleRate
+			  UINT32 BytesPerSec (samplerate*frame size)
+			  UINT16 frameSize or blockAlign (256 on some gameloft games)
+			  UINT16 BitsPerSample (gameloft games appear to use 4)
+			CHAR[4] "data" header
+			UINT32 Length of sample data.
+			<Sample data>
+
+		Files in the wild are not always that canonical: "fact" and "LIST" chunks show up before
+		"data", and a larger "fmt " chunk pushes the samples further down. This probe only reads
+		the first 44 bytes to tell the caller which codec it is dealing with, and the chunks are
+		walked for real in decodeImaAdpcm, which gets the stream from its very start.
+
+		NOTE: It must not read past 44 bytes because PlatformPlayer marks the stream with mark(48)
+		before calling it, and reading past that limit makes the following reset() throw.
+	*/
+	public int[] readHeader(InputStream input) throws IOException 
+	{
+		/* The reads are what advance the stream by exactly 44 bytes, so none of them can be skipped */
+		readInputStreamASCII(input, 4);              /* "RIFF" */
+		readInputStreamInt32(input);                 /* file size */
+		readInputStreamASCII(input, 4);              /* "WAVE" */
+		readInputStreamASCII(input, 4);              /* "fmt " */
+		readInputStreamInt32(input);                 /* fmt chunk size */
+		short audioFormat = (short) readInputStreamInt16(input);
+		short audioChannels = (short) readInputStreamInt16(input);
+		int sampleRate = readInputStreamInt32(input);
+		readInputStreamInt32(input);                 /* byte rate */
+		short frameSize = (short) readInputStreamInt16(input);
+		readInputStreamInt16(input);                 /* bits per sample */
+		readInputStreamASCII(input, 4);              /* "data" */
+		readInputStreamInt32(input);                 /* data size */
 
 		/* 
-		 * Make sure that the output size is 4 times as big as input's due to IMA ADPCM being able to pack 4 bytes of standard PCM 
-		 * data into a single one, with 44 additional bytes in place to accomodate for the new header that will be created afterwards.
-		 *
-		 * Also, calculate the final expected output size right here instead of decreasing the output size on each preamble read,
-		 * checking if the final size is doesn't match what was initially expected (if there's at least one preamble, it won't)
-		 * and then copying everything into a new byte array, which is too costly and can be cut entirely by just passing the 
-		 * correct output size right at the start. This is done because preamble data should not be added into the decoded stream,
-		 * and each preamble is 4 bytes long on IMA ADPCM, which means it would take 16 bytes on the decoded stream for each preamble added.
+		 * We need the audio format to check if it's ADPCM or PCM, and the file's 
+		 * SampleRate and audioChannels to decode ADPCM and build a new header. 
 		 */
-		final int outputSize = (inputSize * 4) + HEADERSIZE - (PCMPREAMBLESIZE * (int) java.lang.Math.floor(inputSize / frameSize));
-		final byte[] output = new byte[outputSize];
+		return new int[] {audioFormat, sampleRate, audioChannels, frameSize};
+	}
 
-		/* Initialize the predictor's sample and step values. */
-		prevSample[LEFTCHANNEL] = 0;
-		prevStep[LEFTCHANNEL] = ima_step_size_table[2];
+	/* 
+	 * Decodes the IMA ADPCM stream into a canonical PCM16LE wav stream, which is what the rest
+	 * of the audio path expects, be it the shared wav mixer or the clip fallback.
+	 */
+	public ByteArrayInputStream decodeImaAdpcm(InputStream stream, int[] wavHeaderData) throws IOException
+	{
+		final RiffInfo info = findDataChunk(stream, wavHeaderData);
 
-		if(numChannels == 2) 
+		final int channels = info.channels;
+		final int blockAlign = info.blockAlign;
+
+		if(channels != 1 && channels != 2)
 		{
-			prevSample[RIGHTCHANNEL] = 0;
-			prevStep[RIGHTCHANNEL] = ima_step_size_table[2];
+			throw new IOException("Unsupported IMA ADPCM channel count: " + channels);
+		}
+		if(blockAlign <= PREAMBLEBYTES * channels || blockAlign % channels != 0)
+		{
+			throw new IOException("Invalid IMA ADPCM block alignment: " + blockAlign);
 		}
 
-		while (inputSize > 0) 
+		/* Each channel has its own preamble and the rest of the block is split in interleave groups */
+		final int groupsPerBlock = (blockAlign - (PREAMBLEBYTES * channels)) / (GROUPBYTES * channels);
+		if(groupsPerBlock <= 0)
 		{
-			/* Check if the decoder reached the beginning of a new chunk to see if the preamble needs to be read. */
-			if (inputSize % frameSize == 0)
+			throw new IOException("IMA ADPCM block has no samples: " + blockAlign);
+		}
+
+		/* 
+		 * A group holds 8 nibbles per channel (16 bytes decoded), so this is the amount of PCM a
+		 * complete block turns into. Every block decodes to whole frames, never to half a sample.
+		 */
+		final int bytesPerBlock = groupsPerBlock * (GROUPBYTES * 2) * channels * 2;
+
+		/* 
+		 * The declared data size bounds the output when it is sane, which is the normal case: the
+		 * array is then allocated exactly and nothing has to be copied afterwards. A file that lies
+		 * about it falls back to what the stream reports, and only then the result is trimmed.
+		 */
+		final int available = stream.available();
+		int dataSize = info.dataSize;
+
+		if(dataSize <= 0) { dataSize = Math.max(0, available); }
+		else if(available > 0 && dataSize > available) { dataSize = available; }
+
+		final boolean partialBlock = (dataSize % blockAlign) != 0;
+		final byte[] output = new byte[HEADERSIZE + ((dataSize / blockAlign) + (partialBlock ? 1 : 0)) * bytesPerBlock];
+
+		final byte[] block = new byte[blockAlign];
+		int remaining = dataSize;
+		int outputIndex = HEADERSIZE;
+
+		while(remaining > 0)
+		{
+			final int wanted = Math.min(blockAlign, remaining);
+			final int read = readBlock(stream, block, wanted);
+			if(read <= 0) { break; }
+
+			/* A truncated last block still decodes whichever groups it holds completely */
+			int groups = 0;
+			if(read > PREAMBLEBYTES * channels)
 			{
-				/* Bytes 0 and 1 describe the chunk's initial predictor value (little-endian) */
-				prevSample[LEFTCHANNEL] = ((input[inputIndex])) | ((input[inputIndex+1]) << 8);
-				/* Byte 2 is the chunk's initial index on the step_size_table */
-				prevStep[LEFTCHANNEL]   = (input[inputIndex+2]);
-
-				if (prevStep[LEFTCHANNEL] < 0)       { prevStep[LEFTCHANNEL] = 0; }
-				else if (prevStep[LEFTCHANNEL] > 88) { prevStep[LEFTCHANNEL] = 88; }
-
-				/* 
-				 * For each 4 bits used in IMA ADPCM, 16 must be used for PCM so adjust 
-				 * indices and sizes accordingly. Byte 3 is reserved and has no practical 
-				 * use for us.
-				 */
-				inputIndex += 4;
-				inputSize -= 4;
-
-				if (numChannels == 2) /* If we're dealing with stereo IMA ADPCM: */
-				{
-					/* Bytes 4 and 5 describe the chunk's initial predictor value (little-endian) for the second channel */
-					prevSample[RIGHTCHANNEL] = ((input[inputIndex])) | ((input[inputIndex+1]) << 8);
-					prevStep[RIGHTCHANNEL]   = (input[inputIndex + 2]);
-
-					if (prevStep[RIGHTCHANNEL] < 0)       { prevStep[RIGHTCHANNEL] = 0; }
-					else if (prevStep[RIGHTCHANNEL] > 88) { prevStep[RIGHTCHANNEL] = 88; }
-
-					inputIndex += 4;
-					inputSize -= 4;
-				}
+				groups = (read - (PREAMBLEBYTES * channels)) / (GROUPBYTES * channels);
 			}
 
-			/* 
-			 * If the decoder isn't at the beginning of a chunk, or the preamble has already been read, 
-			 * decode ADPCM samples inside that same chunk. 
-			 */
+			outputIndex += decodeBlock(block, groups, channels, output, outputIndex);
+			remaining -= read;
 
-			/* 
-			 * In the very rare (pretty much non-existent) cases where some j2me app 
-			 * might use stereo IMA ADPCM, we should decode each audio channel. 
-			 * 
-			 * If the format is stereo, it is assumed to be interleaved, which means that
-			 * the stream will have a left channel sample followed by a right channel sample,
-			 * followed by a left... and so on. In ADPCM those samples appear to be setup in
-			 * such a way that 4 bytes (or 8 nibbles) for the left channel are followed by 4 bytes 
-			 * for the right, at least according to https://wiki.multimedia.cx/index.php/Microsoft_IMA_ADPCM.
-			 */
-			if (numChannels == 2) 
+			if(read < wanted) { break; }
+		}
+
+		/* 
+		 * When blocks came out short (or missing, if the file lied) the array is longer than the
+		 * decoded audio. Trimming keeps the header and the samples matching, and keeps the pcm a
+		 * multiple of the frame size, which is how the wav mixer walks through the buffer.
+		 */
+		final byte[] pcm = outputIndex == output.length ? output : Arrays.copyOf(output, outputIndex);
+
+		buildHeader(pcm, channels, info.sampleRate); /* Builds a new header for the decoded stream. */
+		return new ByteArrayInputStream(pcm);
+	}
+
+	/* 
+	 * Builds a WAV header that describes the decoded ADPCM file on the first 44 bytes. 
+	 * Data: little-endian, 16-bit, signed, same sample rate and channels as source IMA ADPCM.
+	 */
+	private void buildHeader(final byte[] buffer, final int numChannels, final int sampleRate) 
+	{ 
+		final short bitsPerSample = 16;   /* 16-bit PCM */
+		final short audioFormat = 1;      /* WAV linear PCM */
+		final int subChunkSize = 16;      /* Fixed size for Wav Linear PCM */
+		final int chunk = 0x52494646;     /* 'RIFF' */ 
+		final int format = 0x57415645;    /* 'WAVE' */ 
+		final int subChunk1 = 0x666d7420; /* 'fmt ' */ 
+		final int subChunk2 = 0x64617461; /* 'data' */ 
+
+		/* 
+		 * Frame size is fairly standard, and PCM's fixed sample size makes it so the frameSize is
+		 * either 2 bytes for mono, or 4 bytes for stereo.
+		 */
+		final short frameSize = (short) (numChannels * (bitsPerSample / 8));
+
+		/* Whatever comes after the header is sample data, already in whole frames */
+		final int sampleDataLength = buffer.length - HEADERSIZE;
+
+		/* 
+		 * Represents how many bytes are streamed per second. With all of the data above, it's trivial
+		 * to calculate by getting the sample rate, the amount of channels and bytes per sample
+		 */
+		final int bytesPerSec = sampleRate * frameSize;
+		
+		/* NOTE: ChunkSize is everything after it, so the sample data plus the rest of the header */
+
+		/* ChunkID */
+		ByteBuffer.wrap(buffer, 0, 4).order(ByteOrder.BIG_ENDIAN).putInt(chunk);
+		/* ChunkSize (or File size, which is everything minus this field and the chunk id) */
+		ByteBuffer.wrap(buffer, 4, 4).order(ByteOrder.LITTLE_ENDIAN).putInt(sampleDataLength + HEADERSIZE - 8);
+		/* Format (WAVE) */
+		ByteBuffer.wrap(buffer, 8, 4).order(ByteOrder.BIG_ENDIAN).putInt(format);
+		/* SubchunkID (fmt) */
+		ByteBuffer.wrap(buffer, 12, 4).order(ByteOrder.BIG_ENDIAN).putInt(subChunk1);
+		/* SubchunkSize (or format chunk size) */
+		ByteBuffer.wrap(buffer, 16, 4).order(ByteOrder.LITTLE_ENDIAN).putInt(subChunkSize);
+		/* Audioformat */
+		ByteBuffer.wrap(buffer, 20, 2).order(ByteOrder.LITTLE_ENDIAN).putShort(audioFormat);
+		/* NumChannels (will be the same as source ADPCM) */
+		ByteBuffer.wrap(buffer, 22, 2).order(ByteOrder.LITTLE_ENDIAN).putShort((short) numChannels);
+		/* SampleRate (will be the same as source ADPCM) */
+		ByteBuffer.wrap(buffer, 24, 4).order(ByteOrder.LITTLE_ENDIAN).putInt(sampleRate);
+		/* ByteRate (BytesPerSec) */
+		ByteBuffer.wrap(buffer, 28, 4).order(ByteOrder.LITTLE_ENDIAN).putInt(bytesPerSec);
+		/* BlockAlign (Frame Size) */
+		ByteBuffer.wrap(buffer, 32, 2).order(ByteOrder.LITTLE_ENDIAN).putShort(frameSize);
+		/* BitsPerSample */
+		ByteBuffer.wrap(buffer, 34, 2).order(ByteOrder.LITTLE_ENDIAN).putShort(bitsPerSample);
+		/* Subchunk2ID (data) */
+		ByteBuffer.wrap(buffer, 36, 4).order(ByteOrder.BIG_ENDIAN).putInt(subChunk2);
+		/* Subchunk2 Size (sampledata length) */
+		ByteBuffer.wrap(buffer, 40, 4).order(ByteOrder.LITTLE_ENDIAN).putInt(sampleDataLength);
+	}
+
+	/* 
+	 * Decodes the preambles and the interleaved groups of one block straight into 'output'.
+	 * Returns how many bytes were written, which is always a whole number of frames.
+	 */
+	private int decodeBlock(byte[] block, int groups, int channels, byte[] output, int outputIndex)
+	{
+		if(groups <= 0) { return 0; }
+
+		int inputIndex = 0;
+
+		for(int channel = 0; channel < channels; channel++)
+		{
+			/* Bytes 0 and 1 are the block's initial predictor (little-endian, signed) */
+			prevSample[channel] = (short) ((block[inputIndex] & 0xFF) | ((block[inputIndex + 1] & 0xFF) << 8));
+
+			/* Byte 2 is the block's initial index on the step size table, byte 3 is reserved */
+			prevStep[channel] = block[inputIndex + 2] & 0xFF;
+			if(prevStep[channel] > 88) { prevStep[channel] = 88; }
+
+			inputIndex += PREAMBLEBYTES;
+		}
+
+		for(int group = 0; group < groups; group++)
+		{
+			/* A group has GROUPBYTES of packed nibbles for each channel, in channel order */
+			for(int channel = 0; channel < channels; channel++)
 			{
-				/* 
-				 * So in the case it's a stereo stream, decode 8 nibbles from both left and right channels, interleaving
-				 * them in the resulting PCM stream.
-				 */
-				for (short i = 0; i < 8; i++) 
+				for(int i = 0; i < GROUPBYTES; i++)
 				{
-					if(i < 4) { curChannel = LEFTCHANNEL; }
-					else      { curChannel = RIGHTCHANNEL; }
+					final int packed = block[inputIndex++] & 0xFF;
 
-					adpcmSample = (byte) (input[inputIndex] & 0x0f);
-					decodedSample = decodeSample(curChannel, adpcmSample);
-					output[outputIndex + ((i & 3) << 3) + (curChannel << 1)] = (byte)(decodedSample & 0xff);
-					output[outputIndex + ((i & 3) << 3) + (curChannel << 1) + 1] = (byte)(decodedSample >> 8);
+					/* The low nibble of every byte is decoded before the high one */
+					final short low = decodeSample(channel, (byte)(packed & 0x0F));
+					final short high = decodeSample(channel, (byte)((packed >> 4) & 0x0F));
 
-					adpcmSample = (byte) ((input[inputIndex] >> 4) & 0x0f);
-					decodedSample = decodeSample(curChannel, adpcmSample);
-					output[outputIndex + ((i & 3) << 3) + (curChannel << 1) + 4] = (byte)(decodedSample & 0xff);
-					output[outputIndex + ((i & 3) << 3) + (curChannel << 1) + 5] = (byte)(decodedSample >> 8);
-					inputIndex++;
+					final int frame = (group * (GROUPBYTES * 2)) + (i * 2);
+					final int lowOffset = outputIndex + ((frame * channels) + channel) * 2;
+
+					output[lowOffset] = (byte)(low & 0xFF);
+					output[lowOffset + 1] = (byte)((low >> 8) & 0xFF);
+					output[lowOffset + (channels * 2)] = (byte)(high & 0xFF);
+					output[lowOffset + (channels * 2) + 1] = (byte)((high >> 8) & 0xFF);
 				}
-				outputIndex += 32;
-				inputSize -= 8;
-			}
-			else
-			{
-				/* 
-				 * If it's mono, just decode nibbles from ADPCM into PCM data sequentially, there's no sample 
-				 * interleaving to worry about, much less multiple channels, so we only use channel 0.
-				 */
-				adpcmSample = (byte)(input[inputIndex] & 0x0f);
-				decodedSample = decodeSample(LEFTCHANNEL, adpcmSample);
-				output[outputIndex++] = (byte)(decodedSample & 0xff);
-				output[outputIndex++] = (byte)((decodedSample >> 8) & 0xff);
-
-				adpcmSample = (byte)((input[inputIndex] >> 4) & 0x0f);
-				decodedSample = decodeSample(LEFTCHANNEL, adpcmSample);
-				output[outputIndex++] = (byte)(decodedSample & 0xff);
-				output[outputIndex++] = (byte)((decodedSample >> 8) & 0xff);
-
-				inputIndex++;
-				inputSize--;
 			}
 		}
 
-		return output;
+		return groups * (GROUPBYTES * 2) * channels * 2;
 	}
 
 	/* This method will decode a single IMA ADPCM sample to linear PCM_S16LE sample. */
-	static short decodeSample(final int channel, byte adpcmSample)
+	private short decodeSample(final int channel, byte adpcmSample)
 	{
 		/* 
 		 * This decode procedure is based on the following document:
@@ -239,92 +379,113 @@ public class WavImaAdpcmDecoder
 		/* Return the decoded sample casted to short (16-bit) */
 		return (short) (decodedSample & 0xFFFF);
 	}
-	
-	/*
-	 * Since the header is always expected to be positioned right at the start
-	 * of a byte array, read it to determine the WAV type.
-	 * 
-	 * Optionally it also returns some information about the audio format to help build a 
-	 * new header for the decoded stream.
-	*/
-	public int[] readHeader(InputStream input) throws IOException 
+
+	/* 
+	 * Walks the RIFF chunks until the sample data, which is where the decoder has to start. The
+	 * canonical 44-byte layout can't be assumed: 'fact' and 'LIST' chunks, or a larger 'fmt ',
+	 * push the samples further down, and decoding those bytes as audio is pure noise.
+	 */
+	private RiffInfo findDataChunk(InputStream stream, int[] wavHeaderData) throws IOException
 	{
-		/*
-			The header of a WAV (RIFF) file is 44 bytes long and has the following format:
+		if(!readInputStreamASCII(stream, 4).equals("RIFF")) { throw new IOException("Stream is not a RIFF file"); }
+		readInputStreamInt32(stream); /* File size: files in the wild lie about it */
+		if(!readInputStreamASCII(stream, 4).equals("WAVE")) { throw new IOException("Stream is not a WAVE file"); }
 
-			CHAR[4] "RIFF" header
-			UINT32  Size of the file (chunkSize).
-			  CHAR[4] "WAVE" format
-				CHAR[4] "fmt " header
-				UINT32  SubChunkSize (examples: 12 for PCM unsigned 8-bit )
-				  UINT16 AudioFormat (ex: 1 [PCM], 17 [IMA ADPCM] )
-				  UINT16 NumChannels
-				  UINT32 SampleRate
-				  UINT32 BytesPerSec (samplerate*frame size)
-				  UINT16 frameSize or blockAlign (256 on some gameloft games)
-				  UINT16 BitsPerSample (gameloft games appear to use 4)
-				CHAR[4] "data" header
-				UINT32 Length of sample data.
-				<Sample data>
-		*/
+		boolean sawFormat = false;
+		int channels = 0;
+		int sampleRate = 0;
+		int blockAlign = 0;
 
-		String riff = readInputStreamASCII(input, 4);
-		int dataSize = readInputStreamInt32(input);
-		String format = readInputStreamASCII(input, 4);
-		String fmt = readInputStreamASCII(input, 4);
-		int chunkSize = readInputStreamInt32(input);
-		short audioFormat = (short) readInputStreamInt16(input);
-		short audioChannels = (short) readInputStreamInt16(input);
-		int sampleRate = readInputStreamInt32(input);
-		int bytesPerSec = readInputStreamInt32(input);
-		short frameSize = (short) readInputStreamInt16(input);
-		short bitsPerSample = (short) readInputStreamInt16(input);
-		String data = readInputStreamASCII(input, 4);
-		int sampleDataLength = readInputStreamInt32(input);
+		for(int i = 0; i < MAXCHUNKS; i++)
+		{
+			final String id = readInputStreamASCII(stream, 4);
+			final int size = readInputStreamInt32(stream);
 
-		/* Those are only meant for debugging. */
-		/*
-		System.out.println("WAV HEADER_START");
+			if(size < 0) { throw new IOException("Invalid size for chunk '" + id + "': " + size); }
 
-		System.out.println(riff);
-		System.out.println("FileSize:" + dataSize);
-		System.out.println("Format: " + format);
+			if(id.equals("fmt "))
+			{
+				if(size < 16) { throw new IOException("Invalid 'fmt ' chunk size: " + size); }
 
-		System.out.println("---'fmt' header---\n");
-		System.out.println("Header ChunkSize:" + Integer.toString(chunkSize));
-		System.out.println("AudioFormat: " + Integer.toString(audioFormat));
-		System.out.println("AudioChannels:" + Integer.toString(audioChannels));
-		System.out.println("SampleRate:" + Integer.toString(sampleRate));
-		System.out.println("BytesPerSec:" + Integer.toString(bytesPerSec));
-		System.out.println("FrameSize:" + Integer.toString(frameSize));
-		System.out.println("BitsPerSample:" + Integer.toHexString(bitsPerSample));
+				sawFormat = true;
+				readInputStreamInt16(stream); /* Audio format, the caller's probe already checked it */
+				channels = readInputStreamInt16(stream);
+				sampleRate = readInputStreamInt32(stream);
+				readInputStreamInt32(stream); /* Byte rate */
+				blockAlign = readInputStreamInt16(stream);
+				readInputStreamInt16(stream); /* Bits per sample, 4 on adpcm files */
 
-		System.out.println("\n---'data' header---\n");
-		System.out.println("SampleData Length:" + Integer.toString(sampleDataLength));
+				/* cbSize and samplesPerBlock, plus the padding byte of an odd sized chunk */
+				skipChunk(stream, size - 16);
+			}
+			else if(id.equals("data"))
+			{
+				/* Fall back to the 44-byte probe if 'fmt ' was missing or unusable */
+				if(!sawFormat || channels <= 0) { channels = wavHeaderData[2]; }
+				if(sampleRate <= 0) { sampleRate = wavHeaderData[1]; }
+				if(blockAlign <= 0) { blockAlign = wavHeaderData[3]; }
 
-		System.out.println("WAV HEADER_END\n\n\n");
-		*/
-		
-		/* 
-		 * We need the audio format to check if it's ADPCM or PCM, and the file's 
-		 * dataSize, SampleRate and audioChannels to decode ADPCM and build a new header. 
-		 */
-		return new int[] {audioFormat, sampleRate, audioChannels, frameSize};
+				return new RiffInfo(channels, sampleRate, blockAlign, size);
+			}
+			else
+			{
+				/* 'fact', 'LIST' and friends: skip their payload and their padding byte */
+				skipChunk(stream, size);
+			}
+		}
+
+		throw new IOException("No 'data' chunk found in the RIFF stream");
+	}
+
+	/* Skips a chunk payload, including the padding byte that keeps the next chunk word aligned. */
+	private void skipChunk(InputStream stream, int size) throws IOException
+	{
+		if(size < 0 || size > MAXSKIPBYTES) { throw new IOException("Refusing to skip " + size + " bytes"); }
+
+		skipBytes(stream, size);
+		if((size & 1) != 0) { skipBytes(stream, 1); }
+	}
+
+	private void skipBytes(InputStream stream, int count) throws IOException
+	{
+		while(count > 0)
+		{
+			final long skipped = stream.skip(count);
+
+			if(skipped > 0) { count -= (int) skipped; }
+			else if(stream.read() < 0) { throw new java.io.EOFException(); }
+			else { count--; }
+		}
+	}
+
+	/* Reads 'length' bytes unless the stream ends first, and returns how many were actually read. */
+	private static int readBlock(InputStream stream, byte[] buffer, int length) throws IOException
+	{
+		int read = 0;
+
+		while(read < length)
+		{
+			final int count = stream.read(buffer, read, length - read);
+			if(count < 0) { break; }
+			read += count;
+		}
+
+		return read;
 	}
 
 	/* Read a 16-bit little-endian unsigned integer from input.*/
-	public static int readInputStreamInt16(InputStream input) throws IOException 
+	private static int readInputStreamInt16(InputStream input) throws IOException 
 	{ return ( input.read() & 0xFF ) | ( ( input.read() & 0xFF ) << 8 ); }
 
 	/* Read a 32-bit little-endian signed integer from input.*/
-	public static int readInputStreamInt32(InputStream input) throws IOException 
+	private static int readInputStreamInt32(InputStream input) throws IOException 
 	{
 		return ( input.read() & 0xFF ) | ( ( input.read() & 0xFF ) << 8 )
 			| ( ( input.read() & 0xFF ) << 16 ) | ( ( input.read() & 0xFF ) << 24 );
 	}
 
 	/* Return a String containing 'n' Characters of ASCII/ISO-8859-1 text from input. */
-	public static String readInputStreamASCII(InputStream input, int nChars) throws IOException 
+	private static String readInputStreamASCII(InputStream input, int nChars) throws IOException 
 	{
 		byte[] chars = new byte[nChars];
 		readInputStreamData(input, chars, 0, nChars);
@@ -332,7 +493,7 @@ public class WavImaAdpcmDecoder
 	}
 
 	/* Read 'n' Bytes from the InputStream starting from the specified offset into the output array. */
-	public static void readInputStreamData(InputStream input, byte[] output, int offset, int nBytes) throws IOException 
+	private static void readInputStreamData(InputStream input, byte[] output, int offset, int nBytes) throws IOException 
 	{
 		int end = offset + nBytes;
 		while(offset < end) 
@@ -341,91 +502,6 @@ public class WavImaAdpcmDecoder
 			if(read < 0) throw new java.io.EOFException();
 			offset += read;
 		}
-	}
-
-	/* 
-	 * Builds a WAV header that describes the decoded ADPCM file on the first 44 bytes. 
-	 * Data: little-endian, 16-bit, signed, same sample rate and channels as source IMA ADPCM.
-	 */
-	private void buildHeader(final byte[] buffer, final short numChannels, final int sampleRate) 
-	{ 
-		final short bitsPerSample = 16;   /* 16-bit PCM */
-		final short audioFormat = 1;      /* WAV linear PCM */
-		final int subChunkSize = 16;      /* Fixed size for Wav Linear PCM */
-		final int chunk = 0x52494646;     /* 'RIFF' */ 
-		final int format = 0x57415645;    /* 'WAVE' */ 
-		final int subChunk1 = 0x666d7420; /* 'fmt ' */ 
-		final int subChunk2 = 0x64617461; /* 'data' */ 
-
-		/* 
-		 * We'll have 16 bits per sample, so each sample has 2 bytes, with that we just divide
-		 * the size of the byte buffer (minus the header) by (bitsPerSample/8), then multiply by the amount 
-		 * of channels... assuming i didn't mess anything up on the calculus.
-		*/
-		final int samplesPerChannel = buffer.length-44 / ((bitsPerSample/8) * numChannels);
-
-		/* 
-		 * Frame size is fairly standard, and PCM's fixed sample size makes it so the frameSize is either 2 bytes 
-		 * for mono, or 4 bytes for stereo.
-		 */
-		final short frameSize = (short) (numChannels * (bitsPerSample / 8));
-
-		/* 
-		 * Previously only took into account mono streams. And since we know the framesize and
-		 * the amount of samples per channel, in a format that has a fixed amount of bits per sample,
-		 * we can account for multiple audio channels on sampleDataLength with a simpler calculus:
-		 */
-		final int sampleDataLength = (samplesPerChannel * numChannels) * frameSize;
-
-		/* 
-		 * Represents how many bytes are streamed per second. With all of the data above, it's trivial to
-		 * calculate by getting the sample rate, the amount of channels and bytes per sample (bitsPerSample / 8)
-		 */
-		final int bytesPerSec = sampleRate * numChannels * (bitsPerSample / 8);
-		
-		/* NOTE: ChunkSize includes the header, so sampleDataLength + 44, which is the byte size of our header */
-
-		/* ChunkID */
-		ByteBuffer.wrap(buffer, 0, 4).order(ByteOrder.BIG_ENDIAN).putInt(chunk);
-		/* ChunkSize (or File size) */
-		ByteBuffer.wrap(buffer, 4, 4).order(ByteOrder.LITTLE_ENDIAN).putInt(sampleDataLength + 44);
-		/* Format (WAVE) */
-		ByteBuffer.wrap(buffer, 8, 4).order(ByteOrder.BIG_ENDIAN).putInt(format);
-		/* SubchunkID (fmt) */
-		ByteBuffer.wrap(buffer, 12, 4).order(ByteOrder.BIG_ENDIAN).putInt(subChunk1);
-		/* SubchunkSize (or format chunk size) */
-		ByteBuffer.wrap(buffer, 16, 4).order(ByteOrder.LITTLE_ENDIAN).putInt(subChunkSize);
-		/* Audioformat */
-		ByteBuffer.wrap(buffer, 20, 2).order(ByteOrder.LITTLE_ENDIAN).putShort(audioFormat);
-		/* NumChannels (will be the same as source ADPCM) */
-		ByteBuffer.wrap(buffer, 22, 2).order(ByteOrder.LITTLE_ENDIAN).putShort((short) numChannels);
-		/* SampleRate (will be the same as source ADPCM) */
-		ByteBuffer.wrap(buffer, 24, 4).order(ByteOrder.LITTLE_ENDIAN).putInt(sampleRate);
-		/* ByteRate (BytesPerSec) */
-		ByteBuffer.wrap(buffer, 28, 4).order(ByteOrder.LITTLE_ENDIAN).putInt(bytesPerSec);
-		/* BlockAlign (Frame Size) */
-		ByteBuffer.wrap(buffer, 32, 2).order(ByteOrder.LITTLE_ENDIAN).putShort(frameSize);
-		/* BitsPerSample */
-		ByteBuffer.wrap(buffer, 34, 2).order(ByteOrder.LITTLE_ENDIAN).putShort(bitsPerSample);
-		/* Subchunk2ID (data) */
-		ByteBuffer.wrap(buffer, 36, 4).order(ByteOrder.BIG_ENDIAN).putInt(subChunk2);
-		/* Subchunk2 Size (sampledata length) */
-		ByteBuffer.wrap(buffer, 40, 4).order(ByteOrder.LITTLE_ENDIAN).putInt(sampleDataLength);
-	}
-
-	/* Decode the received IMA WAV ADPCM stream into a signed PCM16LE byte array, then return it to PlatformPlayer. */
-	public ByteArrayInputStream decodeImaAdpcm(InputStream stream, int[] wavHeaderData) throws IOException
-	{
-		/* Remove the header from the stream, we shouldn't "decode" it as if it was a sample */
-		readHeader(stream);
-
-		final byte[] input = new byte[stream.available()];
-		readInputStreamData(stream, input, 0, stream.available());
-
-		byte[] output = decodeADPCM(input, input.length, wavHeaderData[2], wavHeaderData[3]);
-		buildHeader(output, (short) wavHeaderData[2], wavHeaderData[1]); /* Builds a new header for the decoded stream. */
-
-		return new ByteArrayInputStream(output);
 	}
 
 }
