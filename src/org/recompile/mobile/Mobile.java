@@ -48,6 +48,9 @@ public class Mobile
 
 	public static boolean sound = true;
 
+	/* Maximum amount of MIDI players that may keep an audio device open at the same time */
+	public static int maxMidiPlayers = 32;
+
 	//Standard keycodes
 	public static final int KEY_NUM0  = Canvas.KEY_NUM0;  // 48
 	public static final int KEY_NUM1  = Canvas.KEY_NUM1;  // 49

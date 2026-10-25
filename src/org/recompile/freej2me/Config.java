@@ -65,7 +65,7 @@ public class Config
 		gc = lcd.getGraphics();
 
 		menu = new ArrayList<String[]>();
-		menu.add(new String[]{"Resume Game", "Restart", "Display Size", "Sound", "Limit FPS", "Phone", "Dimensions Inverted", "Rotation", "Exit"}); // 0 - Main Menu
+		menu.add(new String[]{"Resume Game", "Restart", "Display Size", "Sound", "Limit FPS", "Phone", "Dimensions Inverted", "Rotation", "Max MIDI Players", "Exit"}); // 0 - Main Menu
 		menu.add(new String[]{"96x65","96x96","104x80","128x128","132x176","128x160","176x208","176x220", "208x208", "240x320", "320x240", "240x400", "352x416", "360x640", "640x360" ,"480x800", "800x480","540x960", "960x540"}); // 1 - Size
 		menu.add(new String[]{"Main Menu", "Quit"}); // 2 - Restart Notice
 		menu.add(new String[]{"On", "Off"}); // 3 - sound
@@ -73,6 +73,7 @@ public class Config
 		menu.add(new String[]{"On", "Off"}); // 5 - invertDimesions
 		menu.add(new String[]{"0", "90", "180", "270"}); // 6 - Rotation
 		menu.add(new String[]{"Auto", "60 - Fast", "30 - Slow", "15 - Turtle"}); // 7 - FPS
+		menu.add(new String[]{"1", "2", "4", "8", "16", "32", "48", "64", "96"}); // 8 - Max MIDI Players
 
 
 		onChange = new Runnable()
@@ -121,6 +122,7 @@ public class Config
 				settings.put("invertDimesions", "off");
 				settings.put("rotation", "0");
 				settings.put("fps", "0");
+				settings.put("maxmidiplayers", "32");
 				saveConfig();
 			}
 		}
@@ -169,6 +171,7 @@ public class Config
 			}
 			if(!settings.containsKey("invertDimesions")) { settings.put("invertDimesions", "off"); }
 			if(!settings.containsKey("fps")) { settings.put("fps", "0"); }
+			if(!settings.containsKey("maxmidiplayers")) { settings.put("maxmidiplayers", "32"); }
 
 			int w = Integer.parseInt(settings.get("width"));
 			int h = Integer.parseInt(settings.get("height"));
@@ -290,6 +293,7 @@ public class Config
 			case 5: title = "Dimensions Inverted"; break;
 			case 6: title = "Rotation"; break;
 			case 7: title = "Limit FPS"; break;
+			case 8: title = "Max MIDI Players"; break;
 		}
         // Define a cor do background
 		gc.setColor(0x000000);
@@ -334,7 +338,7 @@ public class Config
 		for(int i=start; i<(start+max) && i<t.length; i++)
 		{
 			label = t[i];
-			if(menuid==0 && i>2 && i<8)
+			if(menuid==0 && i>2 && i<9)
 			{
 				switch(i)
 				{
@@ -343,6 +347,7 @@ public class Config
 					case 5: label = label+": "+settings.get("phone"); break;
 					case 6: label = label+": "+formatValue(settings.get("invertDimesions")); break;
 					case 7: label = label+": "+settings.get("rotation"); break;
+					case 8: label = label+": "+settings.get("maxmidiplayers"); break;
 				}
 			}
 			if(i==itemid)
@@ -383,7 +388,8 @@ public class Config
 					case 5: menuid=4; itemid=0; break; // phone
 					case 6: menuid=5; itemid=0; break; // invertDimesions
 					case 7: menuid=6; itemid=0; break; // rotation
-					case 8: System.exit(0); break;
+					case 8: menuid=8; itemid=0; break; // max MIDI players
+					case 9: System.exit(0); break;
 				}
 			break;
 
@@ -439,6 +445,11 @@ public class Config
 				menuid=0; itemid=0;
 			break;
 
+			case 8: // Max MIDI Players
+				updateMaxMidiPlayers(menu.get(8)[itemid]);
+				menuid=0; itemid=0;
+			break;
+
 		}
 
 		render();
@@ -491,6 +502,14 @@ public class Config
 	{
 		System.out.println("Config: fps "+value);
 		settings.put("fps", value);
+		saveConfig();
+		onChange.run();
+	}
+
+	private void updateMaxMidiPlayers(String value)
+	{
+		System.out.println("Config: maxmidiplayers "+value);
+		settings.put("maxmidiplayers", value);
 		saveConfig();
 		onChange.run();
 	}

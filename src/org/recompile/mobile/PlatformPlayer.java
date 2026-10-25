@@ -20,6 +20,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Vector;
 import java.util.prefs.Preferences;
 
@@ -51,6 +52,14 @@ public class PlatformPlayer implements Player
 
 	private Control[] controls;
 	private static final Vector<PlatformPlayer> activePlayers = new Vector<PlatformPlayer>();
+
+	/*
+	 * Keeps the amount of open MIDI devices bounded. ID Software's games (DOOM II RPG, Orcs and Elves II)
+	 * allocate a new sequencer and synthesizer for every sample they load and never close any of them.
+	 */
+	private static final ArrayList<PlatformPlayer> openMidiPlayers = new ArrayList<PlatformPlayer>();
+
+	private static final Object midiLock = new Object();
 
 	public PlatformPlayer(InputStream stream, String type)
 	{
@@ -102,7 +111,13 @@ public class PlatformPlayer implements Player
 		if(midiType || anyType)
 		{
 			midiPlayer midi = new midiPlayer(mediaData);
-			if(midi.isLoaded()) { player = midi; return; }
+			if(midi.isLoaded())
+			{
+				/* Only takes a slot once the device is known to be in use, so a wav guess doesn't evict anyone */
+				reserveMidiSlot(this);
+				player = midi;
+				return;
+			}
 
 			if(!anyType)
 			{
@@ -176,6 +191,93 @@ public class PlatformPlayer implements Player
 		}
 	}
 
+	/*
+	 * Opens room for one more MIDI device. When the limit is reached, the oldest player that isn't playing
+	 * has its device recycled (or the very oldest one, if every single one of them is running).
+	 */
+	private static void reserveMidiSlot(PlatformPlayer platformPlayer)
+	{
+		PlatformPlayer recyclable = null;
+
+		synchronized(midiLock)
+		{
+			for(int i = openMidiPlayers.size() - 1; i >= 0; i--)
+			{
+				if(openMidiPlayers.get(i).state == Player.CLOSED) { openMidiPlayers.remove(i); }
+			}
+
+			if(openMidiPlayers.size() >= Math.max(1, Mobile.maxMidiPlayers))
+			{
+				int victim = 0;
+				for(int i = 0; i < openMidiPlayers.size(); i++)
+				{
+					if(!openMidiPlayers.get(i).isDeviceRunning()) { victim = i; break; }
+				}
+				recyclable = openMidiPlayers.remove(victim);
+			}
+
+			if(!openMidiPlayers.contains(platformPlayer)) { openMidiPlayers.add(platformPlayer); }
+		}
+
+		if(recyclable != null) { recyclable.recycleMidiDevice(); }
+	}
+
+	private static void releaseMidiSlot(PlatformPlayer platformPlayer)
+	{
+		synchronized(midiLock)
+		{
+			openMidiPlayers.remove(platformPlayer);
+		}
+	}
+
+	/* Applies a new limit right away, when the setting is changed while a game is running. */
+	public static void trimMidiPlayers()
+	{
+		ArrayList<PlatformPlayer> excess = new ArrayList<PlatformPlayer>();
+
+		synchronized(midiLock)
+		{
+			while(openMidiPlayers.size() > Math.max(1, Mobile.maxMidiPlayers))
+			{
+				int victim = 0;
+				for(int i = 0; i < openMidiPlayers.size(); i++)
+				{
+					if(!openMidiPlayers.get(i).isDeviceRunning()) { victim = i; break; }
+				}
+				excess.add(openMidiPlayers.remove(victim));
+			}
+		}
+
+		for(int i = 0; i < excess.size(); i++)
+		{
+			excess.get(i).recycleMidiDevice();
+		}
+	}
+
+	/* Frees the underlying device but leaves the player usable: the next start() prepares it again. */
+	private void recycleMidiDevice()
+	{
+		audioplayer current;
+
+		synchronized(this)
+		{
+			current = player;
+			player = null;
+		}
+
+		if(current != null)
+		{
+			try { current.deallocate(); } catch (Exception e) { }
+		}
+		state = Player.UNREALIZED;
+	}
+
+	private boolean isDeviceRunning()
+	{
+		audioplayer current = player;
+		return current != null && current.isRunning();
+	}
+
 	public void close()
 	{
 		try
@@ -190,6 +292,7 @@ public class PlatformPlayer implements Player
 		catch (Exception e) { }
 		state = Player.CLOSED;
 		unregisterPlayer();
+		releaseMidiSlot(this);
 	}
 
 	public int getState()
@@ -257,6 +360,7 @@ public class PlatformPlayer implements Player
 		{
 			state = Player.CLOSED;
 			unregisterPlayer();
+			releaseMidiSlot(this);
 		}
 	}
 
@@ -287,9 +391,20 @@ public class PlatformPlayer implements Player
 		try
 		{
 			prepare();
-			player.setLoopCount(count);
+			player.setLoopCount(loopCount(count));
 		}
 		catch (Exception e) { }
+	}
+
+	/*
+	 * Games (mostly Gameloft's) ask for one loop more than they want: they set 1 expecting a single
+	 * playback. The Java SE audio APIs already count repetitions, so the request is adjusted once here
+	 * instead of in each player. LOOP_CONTINUOUSLY is kept as is.
+	 */
+	private static int loopCount(int count)
+	{
+		if(count < 0) { return -1; }
+		return count == 0 ? 0 : count - 1;
 	}
 
 	public long setMediaTime(long now)

@@ -148,6 +148,7 @@ int rotateScreen; /* acts as a boolean */
 int phoneType; /* 0=standard, 1=nokia, 2=siemens, 3=motorola */
 int gameFPS; /* Auto(0), 60, 30, 15 */
 int soundEnabled; /* also acts as a boolean */
+int maxMidiPlayers = 32; /* Maximum amount of MIDI players allowed to keep an audio device open at once */
 /* Variables used to manage the pointer speed when controlled from an analog stick */
 int pointerXSpeed = 8;
 int pointerYSpeed = 8;
@@ -336,6 +337,13 @@ static void check_variables(bool first_time_startup)
    }
 
 
+   var.key = "freej2me_maxmidiplayers";
+   if (Environ(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+   {
+		maxMidiPlayers = atoi(var.value);
+   }
+
+
    var.key = "freej2me_pointertype";
 	if (Environ(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
 	{
@@ -414,7 +422,7 @@ static void check_variables(bool first_time_startup)
 
 
 	/* Prepare a string to pass those core options to the Java app */
-	snprintf(options_update, PIPE_MAX_LEN, "FJ2ME_LR_OPTS:|%lux%lu|%d|%d|%d|%d", screenRes[0], screenRes[1], rotateScreen, phoneType, gameFPS, soundEnabled);
+	snprintf(options_update, PIPE_MAX_LEN, "FJ2ME_LR_OPTS:|%lux%lu|%d|%d|%d|%d|%d", screenRes[0], screenRes[1], rotateScreen, phoneType, gameFPS, soundEnabled, maxMidiPlayers);
 	optstrlen = strlen(options_update);
 
 	/* 0xD = 13, which is the special case where the java app will receive the updated configs */
@@ -474,13 +482,14 @@ void retro_init(void)
 	 */
 	check_variables(true);
 
-	char resArg[2][4], rotateArg[2], phoneArg[2], fpsArg[3], soundArg[2];
+	char resArg[2][4], rotateArg[2], phoneArg[2], fpsArg[3], soundArg[2], maxMidiArg[3];
 	sprintf(resArg[0], "%lu", screenRes[0]); /* Libretro config Width  */
 	sprintf(resArg[1], "%lu", screenRes[1]); /* Libretro config Height */
 	sprintf(rotateArg, "%d",  rotateScreen);
 	sprintf(phoneArg,  "%d",  phoneType);
 	sprintf(fpsArg,    "%d",  gameFPS);
 	sprintf(soundArg,  "%d",  soundEnabled);
+	sprintf(maxMidiArg, "%d", maxMidiPlayers);
 
 	/* start java process */
 	char *javapath;
@@ -499,10 +508,10 @@ void retro_init(void)
 			strcpy(javaExe, "java");
 #endif
 	}
-	char *params[] = { javaExe, "-jar", outPath, resArg[0], resArg[1], rotateArg, phoneArg, fpsArg, soundArg, NULL };
+	char *params[] = { javaExe, "-jar", outPath, resArg[0], resArg[1], rotateArg, phoneArg, fpsArg, soundArg, maxMidiArg, NULL };
 
-	log_fn(RETRO_LOG_INFO, "Passing params: %s | %s | %s | %s | %s | %s \n", *(params+3),
-		*(params+4), *(params+5), *(params+6), *(params+7), *(params+8));
+	log_fn(RETRO_LOG_INFO, "Passing params: %s | %s | %s | %s | %s | %s | %s \n", *(params+3),
+		*(params+4), *(params+5), *(params+6), *(params+7), *(params+8), *(params+9));
 	log_fn(RETRO_LOG_INFO, "Preparing to open FreeJ2ME's Java app (make sure freej2me-lr.jar is inside system/).\n");
 
 #ifdef __linux__
@@ -1011,8 +1020,8 @@ pid_t javaOpen(char *cmd, char **params)
 	log_fn(RETRO_LOG_INFO, "Setting up java app's process and pipes...\n");
 
 	log_fn(RETRO_LOG_INFO, "Opening: %s %s %s ...\n", *(params+0), *(params+1), *(params+2));
-	log_fn(RETRO_LOG_INFO, "Params: %s | %s | %s | %s | %s | %s \n", *(params+3),
-		*(params+4), *(params+5), *(params+6), *(params+7), *(params+8));
+	log_fn(RETRO_LOG_INFO, "Params: %s | %s | %s | %s | %s | %s | %s \n", *(params+3),
+		*(params+4), *(params+5), *(params+6), *(params+7), *(params+8), *(params+9));
 
 	int fd_stdin  = 0;
 	int fd_stdout = 1;
@@ -1131,19 +1140,19 @@ void javaOpen(char *cmd, char **params)
 
 	/* Try starting the child process. */
 	char cmdWin[PATH_MAX_LENGTH];
-	/* resArg[0], resArg[1], rotateArg, phoneArg, fpsArg, soundArg */
+	/* resArg[0], resArg[1], rotateArg, phoneArg, fpsArg, soundArg, maxMidiArg */
 	sprintf(cmdWin, "\"%s\" -jar %s", javaExe, cmd); /* quoted, as a bundled runtime's path can hold spaces */
 
 	log_fn(RETRO_LOG_INFO, "Opening: %s \n", cmd);
-	for (int i = 3; i <= 8; i++) /* There are 8 cmd arguments for now */
+	for (int i = 3; i <= 9; i++) /* There are 9 cmd arguments for now */
 	{
 		log_fn(RETRO_LOG_INFO, "Processing arg %d: %s \n", i, *(params+i));
 		sprintf(cmdWin, "%s %s", cmdWin, *(params+i));
 	}
 
 	log_fn(RETRO_LOG_INFO, "Creating proc: %s \n", cmdWin);
-	log_fn(RETRO_LOG_INFO, "Params: %s | %s | %s | %s | %s | %s \n", *(params+3),
-		*(params+4), *(params+5), *(params+6), *(params+7), *(params+8));
+	log_fn(RETRO_LOG_INFO, "Params: %s | %s | %s | %s | %s | %s | %s \n", *(params+3),
+		*(params+4), *(params+5), *(params+6), *(params+7), *(params+8), *(params+9));
 
 	GetStartupInfo(&startInfo);
 	startInfo.dwFlags = STARTF_USESTDHANDLES;

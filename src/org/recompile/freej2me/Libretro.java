@@ -45,6 +45,7 @@ public class Libretro
 	private int rotation = 0;
 	private boolean soundEnabled = true;
 	private int limitFPS = 0;
+	private int maxMidiPlayers = 32;
 
 	private boolean[] pressedKeys = new boolean[128];
 
@@ -92,6 +93,9 @@ public class Libretro
 		limitFPS = Integer.parseInt(args[4]);
 
 		if(Integer.parseInt(args[5]) == 0) { soundEnabled = false; }
+
+		/* Older cores don't send this argument, so keep the default when it's missing */
+		if(args.length > 6) { maxMidiPlayers = Integer.parseInt(args[6]); }
 
 		/* Once it finishes parsing all arguments, it's time to set up freej2me-lr */
 
@@ -252,6 +256,7 @@ public class Libretro
 										if(!soundEnabled)  { config.settings.put("sound", "off"); }
 
 										config.settings.put("fps", ""+limitFPS);
+										config.settings.put("maxmidiplayers", ""+maxMidiPlayers);
 
 										config.saveConfig();
 										settingsChanged();
@@ -306,6 +311,9 @@ public class Libretro
 
 									if(Integer.parseInt(cfgtokens[6])==1) { config.settings.put("sound", "on");  }
 									if(Integer.parseInt(cfgtokens[6])==0) { config.settings.put("sound", "off"); }
+
+									/* The core sends the amount of players itself, not the index of the option */
+									if(cfgtokens.length > 7) { config.settings.put("maxmidiplayers", ""+Integer.parseInt(cfgtokens[7].trim())); }
 
 									config.saveConfig();
 									settingsChanged();
@@ -391,6 +399,13 @@ public class Libretro
 		String sound = config.settings.get("sound");
 		Mobile.sound = false;
 		if(sound.equals("on")) { Mobile.sound = true; }
+
+		String maxMidiPlayers = config.settings.get("maxmidiplayers");
+		if(maxMidiPlayers != null)
+		{
+			Mobile.maxMidiPlayers = Integer.parseInt(maxMidiPlayers);
+			PlatformPlayer.trimMidiPlayers();
+		}
 
 		String phone = config.settings.get("phone");
 		useNokiaControls = false;

@@ -164,6 +164,27 @@ struct retro_core_option_v2_definition core_options[] =
         "on"
     },
     {
+        "freej2me_maxmidiplayers",
+        "Virtual Phone Settings > Max MIDI Players",
+        "Max MIDI Players",
+        "Sets the maximum amount of MIDI players that can keep an audio device open at any given time. Lower values reduce memory usage and improve performance on games that allocate a new MIDI stream for every sample they play (such as ID Software's DOOM II RPG and Orcs and Elves II), but some games might need bigger values.",
+        "Sets the maximum amount of MIDI players that can keep an audio device open at any given time. Lower values reduce memory usage and improve performance on games that allocate a new MIDI stream for every sample they play (such as ID Software's DOOM II RPG and Orcs and Elves II), but some games might need bigger values.",
+        "vphone_settings",
+        {
+            { "1",  "1"  },
+            { "2",  "2"  },
+            { "4",  "4"  },
+            { "8",  "8"  },
+            { "16", "16" },
+            { "32", "32" },
+            { "48", "48" },
+            { "64", "64" },
+            { "96", "96" },
+            { NULL, NULL },
+        },
+        "32"
+    },
+    {
         "freej2me_pointertype",
         "Advanced Settings > Pointer Type",
         "Pointer Type",
@@ -363,6 +384,24 @@ struct retro_core_option_definition core_options_v1 [] =
         "on"
     },
     {
+        "freej2me_maxmidiplayers",
+        "Max MIDI Players",
+        "Sets the maximum amount of MIDI players that can keep an audio device open at any given time. Lower values reduce memory usage and improve performance on games that allocate a new MIDI stream for every sample they play (such as ID Software's DOOM II RPG and Orcs and Elves II), but some games might need bigger values.",
+        {
+            { "1",  "1"  },
+            { "2",  "2"  },
+            { "4",  "4"  },
+            { "8",  "8"  },
+            { "16", "16" },
+            { "32", "32" },
+            { "48", "48" },
+            { "64", "64" },
+            { "96", "96" },
+            { NULL, NULL },
+        },
+        "32"
+    },
+    {
         "freej2me_pointertype",
         "Pointer Type",
         "This option sets the type of pointer used by FreeJ2ME, can be set to use a Mouse, a Touchscreen or neither. Please note that only Mouse supports drag and drop motions",
@@ -479,6 +518,10 @@ static const struct retro_variable vars[] =
     { /* Virtual Phone Sound */
         "freej2me_sound",
         "Virtual Phone Sound; on|off"
+    },
+    { /* Max MIDI Players */
+        "freej2me_maxmidiplayers",
+        "Max MIDI Players; 32|1|2|4|8|16|48|64|96"
     },
     { /* Pointer Type */
         "freej2me_pointertype",

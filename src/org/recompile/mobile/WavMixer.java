@@ -286,7 +286,8 @@ public final class WavMixer
 			}
 		}
 
-		/* MIDP semantics: 0 plays once, 1 plays twice, -1 loops forever. */
+		/* Number of loop backs, as the Java SE audio APIs count them: 0 plays once, -1 loops forever.
+		   PlatformPlayer converts the MIDP value before it gets here. */
 		public void setLoopCount(int count)
 		{
 			synchronized(mixer.lock)

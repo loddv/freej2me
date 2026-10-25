@@ -308,6 +308,13 @@ public class FreeJ2ME
 		Mobile.sound = false;
 		if(sound.equals("on")) { Mobile.sound = true; }
 
+		String maxMidiPlayers = config.settings.get("maxmidiplayers");
+		if(maxMidiPlayers != null)
+		{
+			Mobile.maxMidiPlayers = Integer.parseInt(maxMidiPlayers);
+			PlatformPlayer.trimMidiPlayers();
+		}
+
 		String phone = config.settings.get("phone");
 		useNokiaControls = false;
 		useSiemensControls = false;
