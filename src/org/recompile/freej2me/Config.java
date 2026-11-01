@@ -17,6 +17,7 @@
 package org.recompile.freej2me;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.awt.image.BufferedImage;
 
@@ -51,6 +52,18 @@ public class Config
 
 	private String statusMessage = null;
 
+	private static final int MIN_CUSTOM_SIZE = 16;
+	private static final int MAX_CUSTOM_SIZE = 4096;
+	private static final int MAX_CUSTOM_DIGITS = 4;
+
+	private boolean customInput = false;
+	private String customWidth = "";
+	private String customHeight = "";
+	private boolean customWidthFresh = true;  // field still holds the value it was opened with
+	private boolean customHeightFresh = true;
+	private int customField = 0; // 0 - width, 1 - height
+	private String customHint = null;
+
 	private File file;
 	private String configPath = "";
 	private String configFile = "";
@@ -70,7 +83,11 @@ public class Config
 
 		menu = new ArrayList<String[]>();
 		menu.add(new String[]{"Resume Game", "Restart", "Display Size", "Sound", "Limit FPS", "Phone", "Dimensions Inverted", "Rotation", "Max MIDI Players", "Detect Resolution", "Exit"}); // 0 - Main Menu
-		menu.add(J2MEResolutionDetector.RESOLUTIONS); // 1 - Size
+
+		/* The canonical list stays untouched: "Custom..." only exists in the menu. */
+		String[] sizes = Arrays.copyOf(J2MEResolutionDetector.RESOLUTIONS, J2MEResolutionDetector.RESOLUTIONS.length+1);
+		sizes[sizes.length-1] = "Custom...";
+		menu.add(sizes); // 1 - Size
 		menu.add(new String[]{"Main Menu", "Quit"}); // 2 - Restart Notice
 		menu.add(new String[]{"On", "Off"}); // 3 - sound
 		menu.add(new String[]{"Standard", "Nokia", "Siemens","Motorola"}); // 4 - Phone
@@ -233,6 +250,13 @@ public class Config
 	{
 		statusMessage = null;
 
+		if(customInput)
+		{
+			handleCustomKey(key);
+			render();
+			return;
+		}
+
 		switch(key)
 		{
 			case Mobile.KEY_NUM2: itemid--; break;
@@ -287,6 +311,13 @@ public class Config
 
 	public void render()
 	{
+		if(customInput)
+		{
+			renderCustomSize();
+			Mobile.getPlatform().painter.run();
+			return;
+		}
+
 		String label;
 		String title = "Game Options";
 
@@ -352,10 +383,11 @@ public class Config
 		for(int i=start; i<(start+max) && i<t.length; i++)
 		{
 			label = t[i];
-			if(menuid==0 && i>2 && i<9)
+			if(menuid==0 && i>1 && i<9)
 			{
 				switch(i)
 				{
+					case 2: label = label+": "+currentWidth()+"x"+currentHeight(); break;
 					case 3: label = label+": "+formatValue(settings.get("sound")); break;
 					case 4: label = label+": "+settings.get("fps"); break;
 					case 5: label = label+": "+settings.get("phone"); break;
@@ -409,6 +441,12 @@ public class Config
 			break;
 
 			case 1: // Display Size
+				if(itemid >= J2MEResolutionDetector.RESOLUTIONS.length)
+				{
+					openCustomSize();
+					break;
+				}
+
 				String[] t = menu.get(1)[itemid].split("x");
 
 				updateDisplaySize(Integer.parseInt(t[0]), Integer.parseInt(t[1]));
@@ -510,6 +548,197 @@ public class Config
 		statusMessage = null;
 		onChange.run();
 		onRestart.run();
+	}
+
+	/*
+		Custom size: the user types width and height with the keypad.
+		The fields start filled with the size the game is using right now;
+		the first digit typed replaces that value, like a selected text field.
+		Only the state changes here; keyPressed renders afterwards.
+	*/
+	private void openCustomSize()
+	{
+		customWidth = ""+currentWidth();
+		customHeight = ""+currentHeight();
+		customWidthFresh = true;
+		customHeightFresh = true;
+		customField = 0;
+		customHint = null;
+		customInput = true;
+	}
+
+	private void handleCustomKey(int key)
+	{
+		if(key >= Mobile.KEY_NUM0 && key <= Mobile.KEY_NUM9)
+		{
+			appendCustomDigit((char)('0' + (key - Mobile.KEY_NUM0)));
+			return;
+		}
+
+		switch(key)
+		{
+			case Mobile.KEY_STAR:
+				eraseCustomDigit();
+			break;
+
+			case Mobile.KEY_POUND:
+			case Mobile.NOKIA_SOFT3:
+			case Mobile.SIEMENS_FIRE:
+			case Mobile.MOTOROLA_FIRE:
+				advanceCustomField();
+			break;
+
+			case Mobile.NOKIA_SOFT1:
+			case Mobile.MOTOROLA_SOFT1:
+				customInput = false;
+			break;
+
+			case Mobile.SIEMENS_SOFT1:
+				/* -1 collides with NOKIA_UP/MOTOROLA_UP, so only Siemens uses it as back. */
+				if("Siemens".equals(settings.get("phone"))) { customInput = false; }
+			break;
+		}
+	}
+
+	private void appendCustomDigit(char digit)
+	{
+		if(customField==0)
+		{
+			if(customWidthFresh) { customWidth = ""; customWidthFresh = false; }
+			if(customWidth.length() >= MAX_CUSTOM_DIGITS) { return; }
+			customWidth = customWidth + digit;
+		}
+		else
+		{
+			if(customHeightFresh) { customHeight = ""; customHeightFresh = false; }
+			if(customHeight.length() >= MAX_CUSTOM_DIGITS) { return; }
+			customHeight = customHeight + digit;
+		}
+		customHint = null;
+	}
+
+	private void eraseCustomDigit()
+	{
+		customHint = null;
+
+		if(customField==0)
+		{
+			if(customWidthFresh) { customWidth = ""; customWidthFresh = false; }
+			else if(customWidth.length() > 0) { customWidth = customWidth.substring(0, customWidth.length()-1); }
+			else { customInput = false; } //nothing left on width: leave the custom screen
+		}
+		else
+		{
+			if(customHeightFresh) { customHeight = ""; customHeightFresh = false; }
+			else if(customHeight.length() > 0) { customHeight = customHeight.substring(0, customHeight.length()-1); }
+			else { customField = 0; }
+		}
+	}
+
+	private void advanceCustomField()
+	{
+		customHint = null;
+
+		if(customField==0)
+		{
+			if(customWidth.length()==0) { customHint = "Type width"; return; }
+			customField = 1;
+			return;
+		}
+
+		if(customHeight.length()==0) { customHint = "Type height"; return; }
+		applyCustomSize();
+	}
+
+	private void applyCustomSize()
+	{
+		int w = parseCustomSize(customWidth);
+		int h = parseCustomSize(customHeight);
+
+		if(w<MIN_CUSTOM_SIZE || w>MAX_CUSTOM_SIZE || h<MIN_CUSTOM_SIZE || h>MAX_CUSTOM_SIZE)
+		{
+			customHint = MIN_CUSTOM_SIZE+".."+MAX_CUSTOM_SIZE;
+			return;
+		}
+
+		customInput = false;
+		customHint = null;
+
+		updateDisplaySize(w, h);
+
+		menuid = 2; itemid = 0; // Restart Required
+	}
+
+	/*Size the game is really using: settings are what settingsChanged() reads.*/
+	private int currentWidth() { return parseIntSetting("width", width); }
+	private int currentHeight() { return parseIntSetting("height", height); }
+
+	private int parseIntSetting(String key, int fallback)
+	{
+		try
+		{
+			return Integer.parseInt(settings.get(key));
+		}
+		catch (Exception e)
+		{
+			return fallback;
+		}
+	}
+
+	private int parseCustomSize(String value)
+	{
+		try
+		{
+			return Integer.parseInt(value);
+		}
+		catch (NumberFormatException e)
+		{
+			return -1;
+		}
+	}
+
+	private void renderCustomSize()
+	{
+		gc.setColor(0x000000);
+		gc.fillRect(0,0,width,height);
+		gc.setColor(0xFFFFFF);
+		gc.drawString("Custom Size", width/2, 2, Graphics.HCENTER);
+		gc.drawLine(0, 20, width, 20);
+		gc.drawLine(0, height-20, width, height-20);
+		gc.drawString("current: "+currentWidth()+"x"+currentHeight(), width/2, 24, Graphics.HCENTER);
+
+		int top = Math.max(26, (height/2)-20);
+		int lineHeight = height>=200 ? 22 : 16;
+
+		drawCustomField("W: ", customWidth, customField==0, top);
+		drawCustomField("H: ", customHeight, customField==1, top+lineHeight);
+
+		gc.setColor(0xFFFFFF);
+		if(customHint != null)
+		{
+			gc.drawString(customHint, width/2, height-17, Graphics.HCENTER);
+		}
+		else
+		{
+			gc.drawString("Q Back", 3, height-17, Graphics.TOP);
+			gc.drawString(customField==0 ? "# Next" : "# OK", width-3, height-17, Graphics.RIGHT);
+		}
+	}
+
+	private void drawCustomField(String name, String value, boolean active, int y)
+	{
+		String text = name+(value.length()==0 ? "____" : value);
+
+		if(active)
+		{
+			gc.setColor(0x009FFF);
+			gc.drawString("> "+text+" <", width/2, y, Graphics.HCENTER);
+		}
+		else
+		{
+			gc.setColor(0xFFFFFF);
+			gc.drawString(text, width/2, y, Graphics.HCENTER);
+		}
 	}
 
 	private void updateDisplaySize(int w, int h)
