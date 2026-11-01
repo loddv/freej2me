@@ -46,6 +46,27 @@ public abstract class Canvas extends Displayable
 	public static final int KEY_STAR = 42;
 	public static final int KEY_POUND = 35;
 
+	/* Volatile: written/read by the MIDlet and frontend threads */
+	private volatile boolean painting = false;
+	private volatile boolean repaintQueued = false;
+
+	private final Runnable deferredRepaint = new Runnable()
+	{
+		public void run()
+		{
+			repaintQueued = false;
+			try
+			{
+				Canvas.this.repaint();
+			}
+			catch (Throwable t) // The Display timer thread must survive a broken MIDlet
+			{
+				System.out.print("Canvas repaint(): "+t.getMessage());
+				t.printStackTrace();
+			}
+		}
+	};
+
 
 	protected Canvas()
 	{
@@ -157,6 +178,18 @@ public abstract class Canvas extends Displayable
 
 	public void repaint()
 	{
+		/*
+			MIDlets that call repaint() from inside paint() would recurse until the
+			stack overflows (StackOverflowError), since repaint() paints synchronously
+			here. Those requests are queued and handled by the Display event loop
+			after paint() returns, which is how real devices behave.
+		*/
+		if(!startPainting())
+		{
+			deferRepaint();
+			return;
+		}
+
 		PlatformGraphics graphics;
 		try
 		{
@@ -173,17 +206,52 @@ public abstract class Canvas extends Displayable
 			System.out.print("Canvas repaint(): "+e.getMessage());
 			e.printStackTrace();
 		}
+		finally
+		{
+			painting = false;
+		}
 	}
 
 	public void repaint(int x, int y, int width, int height)
 	{
-		PlatformGraphics graphics = platformImage.getGraphics();
-		graphics.reset();
-		paint(graphics);
-		if(Mobile.getDisplay().getCurrent() == this)
+		if(!startPainting())
 		{
-			Mobile.getPlatform().repaint(platformImage, x, y, width, height);
+			deferRepaint();
+			return;
 		}
+
+		try
+		{
+			PlatformGraphics graphics = platformImage.getGraphics();
+			graphics.reset();
+			paint(graphics);
+			if(Mobile.getDisplay().getCurrent() == this)
+			{
+				Mobile.getPlatform().repaint(platformImage, x, y, width, height);
+			}
+		}
+		finally
+		{
+			painting = false;
+		}
+	}
+
+	/* Returns false when this canvas is already being painted, so the request has to be queued */
+	private synchronized boolean startPainting()
+	{
+		if(painting) { return false; }
+		painting = true;
+		return true;
+	}
+
+	private synchronized void deferRepaint()
+	{
+		Display display = Mobile.getDisplay();
+
+		if(display == null || repaintQueued || display.getCurrent() != this) { return; }
+
+		repaintQueued = true;
+		display.callSerially(deferredRepaint);
 	}
 
 	public void serviceRepaints()

@@ -93,15 +93,24 @@ public class Display
 	{
 		public void run()
 		{
-			if(!serialCalls.isEmpty())
+			Runnable serialCall;
+
+			/*
+				Remove the call from the queue before running it. removeElement(0)
+				boxes 0 into an Integer and searches for that object, so nothing was
+				ever removed and the head of the queue ran again on every tick.
+			*/
+			synchronized(serialCalls)
 			{
-				try
-				{
-					serialCalls.get(0).run();
-					serialCalls.removeElement(0);
-				}
-				catch (Exception e) { }
+				if(serialCalls.isEmpty()) { return; }
+				serialCall = serialCalls.remove(0);
 			}
+
+			try
+			{
+				serialCall.run();
+			}
+			catch (Exception e) { }
 		}
 	}
 
