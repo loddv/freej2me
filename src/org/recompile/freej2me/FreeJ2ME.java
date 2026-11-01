@@ -258,6 +258,7 @@ public class FreeJ2ME
 		}
 		if(Mobile.getPlatform().loadJar(jarFile))
 		{
+			config.jarPath = jarFile;
 			config.init();
 
 			/* Allows FreeJ2ME to set the width and height passed as cmd arguments. */

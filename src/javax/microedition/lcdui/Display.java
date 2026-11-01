@@ -67,6 +67,27 @@ public class Display
 	{
 		serialCalls.add(r);
 	}
+
+	/*
+		Releases the serial call timer. The timer thread is not a daemon, so
+		without this call a JVM that only builds MIDlets (as the resolution
+		detector does) would never terminate.
+	*/
+	public void dispose()
+	{
+		timertask.cancel();
+		timer.cancel();
+		if(display == this) { display = null; }
+	}
+
+	/*
+		Puts back the Display that was active before a MIDlet was created
+		outside of the regular emulator flow.
+	*/
+	public static void restoreDisplay(Display d)
+	{
+		display = d;
+	}
 	private class SerialCallTimerTask extends TimerTask
 	{
 		public void run()

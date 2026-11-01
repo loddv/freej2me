@@ -239,6 +239,7 @@ public class Libretro
 									{
 										jarFile = url.toString();
 										// Check config
+										config.jarPath = jarFile;
 										config.init();
 
 										/* Override configs with the ones passed through commandline */

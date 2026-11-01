@@ -38,6 +38,8 @@ public class Config
 {
 	public boolean isRunning = false;
 
+	public String jarPath = "";
+
 	private PlatformImage lcd;
 	private Graphics gc;
 	private int width;
@@ -46,6 +48,8 @@ public class Config
 	private ArrayList<String[]> menu;
 	private int menuid = 0;
 	private int itemid = 0;
+
+	private String statusMessage = null;
 
 	private File file;
 	private String configPath = "";
@@ -65,8 +69,8 @@ public class Config
 		gc = lcd.getGraphics();
 
 		menu = new ArrayList<String[]>();
-		menu.add(new String[]{"Resume Game", "Restart", "Display Size", "Sound", "Limit FPS", "Phone", "Dimensions Inverted", "Rotation", "Max MIDI Players", "Exit"}); // 0 - Main Menu
-		menu.add(new String[]{"96x65","96x96","104x80","128x128","132x176","128x160","176x208","176x220", "208x208", "240x320", "320x240", "240x400", "352x416", "360x640", "360x480", "640x360", "640x480", "480x360", "480x800", "800x360", "800x480","540x960", "960x540", "854x650", "1280x663"}); // 1 - Size
+		menu.add(new String[]{"Resume Game", "Restart", "Display Size", "Sound", "Limit FPS", "Phone", "Dimensions Inverted", "Rotation", "Max MIDI Players", "Detect Resolution", "Exit"}); // 0 - Main Menu
+		menu.add(J2MEResolutionDetector.RESOLUTIONS); // 1 - Size
 		menu.add(new String[]{"Main Menu", "Quit"}); // 2 - Restart Notice
 		menu.add(new String[]{"On", "Off"}); // 3 - sound
 		menu.add(new String[]{"Standard", "Nokia", "Siemens","Motorola"}); // 4 - Phone
@@ -227,6 +231,8 @@ public class Config
 
 	public void keyPressed(int key)
 	{
+		statusMessage = null;
+
 		switch(key)
 		{
 			case Mobile.KEY_NUM2: itemid--; break;
@@ -318,6 +324,14 @@ public class Config
 
 		String[] t = menu.get(menuid);
 
+		if(statusMessage != null)
+		{
+			gc.setColor(0xFFFFFF);
+			gc.drawString(statusMessage, width/2, height/2, Graphics.HCENTER);
+			Mobile.getPlatform().painter.run();
+			return;
+		}
+
 		int availableHeight = Math.max(1, height-50);
 		int ah = Math.max(15, availableHeight/(t.length+1));
 
@@ -389,7 +403,8 @@ public class Config
 					case 6: menuid=5; itemid=0; break; // invertDimesions
 					case 7: menuid=6; itemid=0; break; // rotation
 					case 8: menuid=8; itemid=0; break; // max MIDI players
-					case 9: System.exit(0); break;
+					case 9: detectResolution(); break; // detect resolution
+					case 10: System.exit(0); break;
 				}
 			break;
 
@@ -453,6 +468,48 @@ public class Config
 		}
 
 		render();
+	}
+
+	/*
+		Runs the resolution detector and applies the result, restarting the
+		game. The calibrated config is skipped here because the current
+		settings already are that config.
+	*/
+	private void detectResolution()
+	{
+		statusMessage = "Detecting resolution...";
+		render();
+
+		J2MEResolutionDetector.Resolution resolution;
+		try
+		{
+			resolution = J2MEResolutionDetector.detect(jarPath, false);
+		}
+		catch (Exception e)
+		{
+			System.out.println("Config: resolution detection failed: "+e.getMessage());
+			statusMessage = "Detection failed";
+			render();
+			return;
+		}
+
+		System.out.println("Config: detected "+resolution+" ("+resolution.source+")");
+
+		/* Keep the buffer size plus rotation layout used by game.conf. */
+		settings.put("invertDimesions", "off");
+		settings.put("rotation", ""+resolution.rotation);
+		settings.put("width", ""+resolution.bufferWidth);
+		settings.put("height", ""+resolution.bufferHeight);
+		saveConfig();
+
+		width = resolution.bufferWidth;
+		height = resolution.bufferHeight;
+		lcd = new PlatformImage(width, height);
+		gc = lcd.getGraphics();
+
+		statusMessage = null;
+		onChange.run();
+		onRestart.run();
 	}
 
 	private void updateDisplaySize(int w, int h)

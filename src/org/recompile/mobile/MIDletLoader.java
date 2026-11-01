@@ -58,6 +58,13 @@ public class MIDletLoader extends URLClassLoader
 	private volatile MIDlet mainInst;
 	private final ThreadGroup midletThreads = new ThreadGroup("FreeJ2ME MIDlet");
 
+	/*
+		When false, failures in start() are reported by throwing instead of
+		terminating the JVM. Used by J2MEResolutionDetector, which has to keep
+		running after a MIDlet fails to initialize.
+	*/
+	public boolean exitOnFailure = true;
+
 	private HashMap<String, String> properties = new HashMap<String, String>(32);
 
 
@@ -98,11 +105,22 @@ public class MIDletLoader extends URLClassLoader
 
 	public void start() throws MIDletStateChangeException
 	{
-		Method start = null;
+		startApp(createMIDlet());
+	}
 
+	/*
+		Loads the MIDlet class named in the manifest and builds an instance.
+		When exitOnFailure is false the failure is thrown back to the caller.
+	*/
+	public MIDlet createMIDlet() throws MIDletStateChangeException
+	{
 		try
 		{
 			mainClass = loadClass(className, true);
+			if(mainClass == null)
+			{
+				throw new ClassNotFoundException(className);
+			}
 
 			Constructor constructor;
 			constructor = mainClass.getConstructor();
@@ -110,15 +128,25 @@ public class MIDletLoader extends URLClassLoader
 
 			MIDlet.initAppProperties(properties);
 			mainInst = (MIDlet)constructor.newInstance();
+			return mainInst;
 		}
 		catch (Exception e)
 		{
 			System.out.println("Problem Constructing " + name + " class: " +className);
 			System.out.println("Reason: "+e.getMessage());
 			e.printStackTrace();
-			System.exit(0);
-			return;
+			fail(e);
+			return null;
 		}
+	}
+
+	/*
+		Finds startApp() through the class hierarchy and calls it on the instance.
+	*/
+	public void startApp(MIDlet inst) throws MIDletStateChangeException
+	{
+		Method start = null;
+		Class<?> target = mainClass;
 
 		try
 		{
@@ -126,18 +154,18 @@ public class MIDletLoader extends URLClassLoader
 			{
 				try
 				{
-					start = mainClass.getDeclaredMethod("startApp");
+					start = target.getDeclaredMethod("startApp");
 					start.setAccessible(true);
 				}
 				catch (NoSuchMethodException e)
 				{
-					mainClass = mainClass.getSuperclass();
-					if (mainClass == null || mainClass == MIDlet.class)
+					target = target.getSuperclass();
+					if (target == null || target == MIDlet.class)
 					{
 						throw e;
 					}
 
-					mainClass = loadClass(mainClass.getName(), true);
+					target = loadClass(target.getName(), true);
 				}
 			}
 		}
@@ -145,19 +173,41 @@ public class MIDletLoader extends URLClassLoader
 		{
 			System.out.println("Can't Find startApp Method");
 			e.printStackTrace();
-			System.exit(0);
+			fail(e);
 			return;
 		}
 
 		try
 		{
-			start.invoke(mainInst);
+			start.invoke(inst);
 		}
 		catch (Exception e)
 		{
 			e.printStackTrace();
-			System.exit(0);
+			fail(e);
 		}
+	}
+
+	/*
+		Terminates the emulator on failure (default), or reports the failure to
+		the caller when exitOnFailure is disabled.
+	*/
+	private void fail(Exception e) throws MIDletStateChangeException
+	{
+		if(exitOnFailure)
+		{
+			System.exit(0);
+			return;
+		}
+
+		MIDletStateChangeException failure = new MIDletStateChangeException(e.getMessage());
+		failure.initCause(e);
+		throw failure;
+	}
+
+	public String getMIDletClassName()
+	{
+		return className;
 	}
 
 	public void launch()
