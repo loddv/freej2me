@@ -94,6 +94,7 @@ struct retro_core_option_v2_definition core_options[] =
             { "240x400",   NULL },
             { "352x416",   NULL },
             { "360x640",   NULL },
+            { "360x480",   NULL },
             { "640x360",   NULL },
             { "640x480",   NULL },
             { "480x360",   NULL },
@@ -102,6 +103,8 @@ struct retro_core_option_v2_definition core_options[] =
             { "800x480",   NULL },
             { "540x960",   NULL },
             { "960x540",   NULL },
+            { "854x650",   NULL },
+            { "1280x663",  NULL },
             { NULL, NULL },
         },
         "240x320"
@@ -329,6 +332,7 @@ struct retro_core_option_definition core_options_v1 [] =
             { "240x400",   NULL },
             { "352x416",   NULL },
             { "360x640",   NULL },
+            { "360x480",   NULL },
             { "640x360",   NULL },
             { "640x480",   NULL },
             { "480x360",   NULL },
@@ -337,6 +341,8 @@ struct retro_core_option_definition core_options_v1 [] =
             { "800x480",   NULL },
             { "540x960",   NULL },
             { "960x540",   NULL },
+            { "854x650",   NULL },
+            { "1280x663",  NULL },
             { NULL, NULL },
         },
         "240x320"
@@ -507,7 +513,7 @@ static const struct retro_variable vars[] =
 {
     { /* Screen Resolution */
         "freej2me_resolution",
-        "Phone Resolution (Core Restart required); 96x65|96x96|104x80|128x128|132x176|128x160|176x208|176x220|208x208|240x320|320x240|240x400|352x416|360x640|360x480|640x360|640x480|480x360|480x800|800x480|800x360|540x960|960x540"
+        "Phone Resolution (Core Restart required); 96x65|96x96|104x80|128x128|132x176|128x160|176x208|176x220|208x208|240x320|320x240|240x400|352x416|360x640|360x480|640x360|640x480|480x360|480x800|800x360|800x480|540x960|960x540|854x650|1280x663"
     },
     { /* Screen Rotation */
         "freej2me_rotate",
