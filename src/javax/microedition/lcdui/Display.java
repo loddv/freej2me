@@ -41,7 +41,8 @@ public class Display
 	public static final int COLOR_HIGHLIGHTED_BORDER = 5;
 
 
-	private Displayable current;
+	/* Volatile: written by the MIDlet thread and read by the frontend input threads */
+	private volatile Displayable current;
 
 	private static Display display;
 

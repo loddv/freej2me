@@ -18,6 +18,8 @@ package org.recompile.mobile;
 
 import java.net.URL;
 
+import javax.microedition.lcdui.Display;
+import javax.microedition.lcdui.Displayable;
 import javax.microedition.lcdui.game.GameCanvas;
 import javax.microedition.lcdui.Image;
 import javax.microedition.m3g.Graphics3D;
@@ -86,36 +88,56 @@ public class MobilePlatform
 		painter = r;
 	}
 
+	/*
+		Returns the Displayable that should receive input events, or null when
+		no MIDlet is running (before startup, after exiting or while restarting).
+	*/
+	private Displayable getInputTarget()
+	{
+		Display display = Mobile.getDisplay();
+		if(display == null) { return null; }
+
+		return display.getCurrent();
+	}
+
 	public void keyPressed(int keycode)
 	{
 		updateKeyState(keycode, 1);
-		Mobile.getDisplay().getCurrent().keyPressed(keycode);
+
+		Displayable target = getInputTarget();
+		if(target != null) { target.keyPressed(keycode); }
 	}
 
 	public void keyReleased(int keycode)
 	{
 		updateKeyState(keycode, 0);
-		Mobile.getDisplay().getCurrent().keyReleased(keycode);
+
+		Displayable target = getInputTarget();
+		if(target != null) { target.keyReleased(keycode); }
 	}
 
 	public void keyRepeated(int keycode)
 	{
-		Mobile.getDisplay().getCurrent().keyRepeated(keycode);
+		Displayable target = getInputTarget();
+		if(target != null) { target.keyRepeated(keycode); }
 	}
 
 	public void pointerDragged(int x, int y)
 	{
-		Mobile.getDisplay().getCurrent().pointerDragged(x, y);
+		Displayable target = getInputTarget();
+		if(target != null) { target.pointerDragged(x, y); }
 	}
 
 	public void pointerPressed(int x, int y)
 	{
-		Mobile.getDisplay().getCurrent().pointerPressed(x, y);
+		Displayable target = getInputTarget();
+		if(target != null) { target.pointerPressed(x, y); }
 	}
 
 	public void pointerReleased(int x, int y)
 	{
-		Mobile.getDisplay().getCurrent().pointerReleased(x, y);
+		Displayable target = getInputTarget();
+		if(target != null) { target.pointerReleased(x, y); }
 	}
 
 	private void updateKeyState(int key, int val)

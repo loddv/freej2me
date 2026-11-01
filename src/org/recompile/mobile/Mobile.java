@@ -34,7 +34,8 @@ public class Mobile
 {
 	private static MobilePlatform platform;
 
-	private static Display display;
+	/* Volatile: written by the MIDlet thread and read by the frontend input threads */
+	private static volatile Display display;
 
 	private static Graphics3D graphics3d;
 
