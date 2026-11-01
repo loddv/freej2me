@@ -8,6 +8,28 @@ Authors :
 - David Richardson [Recompile@retropie]
 - Saket Dandawate  [Hex@retropie]
 
+## Implementations by @loddv
+
+The following changes cover all 17 commits authored by [@loddv](https://github.com/loddv) on the `dev` branch:
+
+- [`2d436ea`](https://github.com/loddv/freej2me/commit/2d436ea39c60395dc377b8fbb603524fa4d8532c) — expanded the **Display Size** menu. Available sizes: `96x65`, `96x96`, `104x80`, `128x128`, `132x176`, `128x160`, `176x208`, `176x220`, `208x208`, `240x320`, `320x240`, `240x400`, `352x416`, `360x640`, `360x480`, `640x360`, `640x480`, `480x360`, `480x800`, `800x360`, `800x480`, `540x960`, and `960x540`.
+- [`b503b29`](https://github.com/loddv/freej2me/commit/b503b29aa7fa70cc6a2f95577bcaee02c76a45e9) — refactored `WavImaAdpcmDecoder`, restructuring methods and adding explanatory comments.
+- [`60a88c9`](https://github.com/loddv/freej2me/commit/60a88c919055a483fcb8fa148cb012202ee5547c) — added a **Max MIDI Players** configuration setting and connected it to the player logic.
+- [`00b4b3f`](https://github.com/loddv/freej2me/commit/00b4b3f4e2f6eb5487d9e3367194a8ffe4c43513) — reordered settings for usability and refactored exit handling.
+- [`c050f68`](https://github.com/loddv/freej2me/commit/c050f6809ed204d957da6f44fa46af688b790056) — refactored menu item rendering and added formatted setting values.
+- [`0d87528`](https://github.com/loddv/freej2me/commit/0d87528bcc61003490004fdc8e9fca28a2a57814) — introduced `WavMixer` for low-latency audio mixing and refactored audio player logic.
+- [`1e158ad`](https://github.com/loddv/freej2me/commit/1e158ad284f71b85b177e6e13b71a5761d1607dd) — added the `540x960` and `960x540` screen resolutions.
+- [`892328b`](https://github.com/loddv/freej2me/commit/892328b0e7f6eac1e68d23b54cd392fc53be3198) — added CI artifact uploads for SDL3 and other builds.
+- [`5a9f5af`](https://github.com/loddv/freej2me/commit/5a9f5af2bfd7160bc1068c893bb8f43f841d291c) — added the SDL3 frontend and its interface implementation.
+- [`91d2081`](https://github.com/loddv/freej2me/commit/91d20812e5eea28ac58e0941640bb3e3368566ab) — improved game restart handling and MIDlet lifecycle management.
+- [`c41b9cb`](https://github.com/loddv/freej2me/commit/c41b9cbb8f651955448f6275781a73b3ed0b2ebe) — updated the settings menu presentation, including its background and selection colors, title wording, and back-key label; also ignored the local `config/` directory.
+- [`ab954f6`](https://github.com/loddv/freej2me/commit/ab954f6d41e9de1462bcc7d948d869e617d3e968) — implemented game restart.
+- [`5b9cd78`](https://github.com/loddv/freej2me/commit/5b9cd78c209b47e9040bbbcb3892bd680c77a7cf) — fixed the LCD background and excluded IDE-generated output from version control.
+- [`a3afcaa`](https://github.com/loddv/freej2me/commit/a3afcaacbfee1ec52420adcbb1a2cb382fdc0590) — exposed accessors for inverted screen dimensions.
+- [`93eb29b`](https://github.com/loddv/freej2me/commit/93eb29be0eb90cb0b3797739427f04791a97e55e) — mapped desktop mouse input correctly when the screen is rotated.
+- [`194c2f0`](https://github.com/loddv/freej2me/commit/194c2f041747320bcaa8dafe7b0ed3f6c02a1553) — implemented configurable screen rotation.
+- [`b22b631`](https://github.com/loddv/freej2me/commit/b22b6316925cc761dbd995ff2e8a8f2d0b893189) — published the project source and updates to build files, game configurations, packaging, and license.
+
 ---
 
 ## Controls
